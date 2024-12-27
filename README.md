@@ -1,4 +1,5 @@
 [![Go](https://github.com/dhcgn/go-mqtt-dispatcher/actions/workflows/go.yml/badge.svg)](https://github.com/dhcgn/go-mqtt-dispatcher/actions/workflows/go.yml)
+[![codecov](https://codecov.io/github/dhcgn/go-mqtt-dispatcher/graph/badge.svg?token=76wV1FyxEw)](https://codecov.io/github/dhcgn/go-mqtt-dispatcher)
 [![Alt](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/dhcgn/go-mqtt-dispatcher)
 
 # go-mqtt-dispatcher
@@ -15,6 +16,12 @@ Send data to the [awtrix 3 mqtt api](https://blueforcer.github.io/awtrix3/#/api?
 
 Shelly publishes on mqtt `{"total_act_power": 392.572}` and this app transforms it to `392 W` and sends it to the awtrix 3 device trough mqtt.
 
+## Current limitations
+
+- Only works with numeric values
+- No authentication to mqtt
+- Only protocol `mqtt://` is supported
+- No TLS support
 
 ## Sequence Diagram
 
@@ -30,6 +37,28 @@ sequenceDiagram
     Note over Go App: Transform:<br/>- Round to integer<br/>- Add "W" unit
     Go App->>MQTT Broker: Publish "392 W"
     MQTT Broker->>Awtrix3: Display "392 W"
+```
+
+### Accumulation Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant Solar Inverter 1
+    participant Solar Inverter 2
+    participant MQTT Broker
+    participant Go App
+    participant Awtrix3
+
+    Note over Go App: Initialize state map<br/>for "Solar" group
+    Solar Inverter 1->>MQTT Broker: Publish {"apower": 1500}
+    MQTT Broker->>Go App: Forward message
+    Note over Go App: Store value 1500<br/>for Solar Inverter 1
+    Solar Inverter 2->>MQTT Broker: Publish {"apower": 300}
+    MQTT Broker->>Go App: Forward message
+    Note over Go App: Store value -300<br/>for Solar Inverter 2 (inverted beacuse of negative power)
+    Note over Go App: Sum values:<br/>1500 + (-300) = 1200
+    Go App->>MQTT Broker: Publish "1200 W"
+    MQTT Broker->>Awtrix3: Display "1200 W"
 ```
 
 ## Example

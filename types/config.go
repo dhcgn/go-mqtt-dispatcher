@@ -2,6 +2,11 @@ package types
 
 import "net/url"
 
+type Transform interface {
+	GetJsonPath() string
+	GetInvert() bool
+}
+
 type MqttConfig struct {
 	Broker      string `yaml:"broker"`
 	BrokerAsUri *url.URL
@@ -23,9 +28,24 @@ type TopicConfig struct {
 	Icon      string          `yaml:"icon"`
 }
 
+func (t TransformConfig) GetJsonPath() string {
+	return t.JsonPath
+}
+func (t TransformConfig) GetInvert() bool {
+	return t.Invert
+}
+
 type AccumulatedTopicTransform struct {
 	JsonPath string `yaml:"jsonPath"`
 	Invert   bool   `yaml:"invert,omitempty"`
+}
+
+func (t AccumulatedTopicTransform) GetJsonPath() string {
+	return t.JsonPath
+}
+
+func (t AccumulatedTopicTransform) GetInvert() bool {
+	return t.Invert
 }
 
 type AccumulatedTopicConfig struct {
