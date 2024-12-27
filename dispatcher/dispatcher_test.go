@@ -1,6 +1,7 @@
 package dispatcher
 
 import (
+	"fmt"
 	"go-mqtt-dispatcher/types"
 	"testing"
 )
@@ -37,5 +38,28 @@ func TestAccumulatFromStorage(t *testing.T) {
 	expected = 0.0
 	if result != expected {
 		t.Errorf("Expected %v, got %v", expected, result)
+	}
+}
+
+func TestCreatingFormattedPublishMessage(t *testing.T) {
+	tests := []struct {
+		num    float64
+		format string
+		icon   string
+		want   string
+	}{
+		{num: 123.456, format: "%.2f", icon: "", want: `{"text":"123.46"}`},
+		{num: 123.456, format: "%.2f", icon: "icon1", want: `{"text":"123.46","icon":"icon1"}`},
+		{num: 0, format: "%.0f", icon: "icon2", want: `{"text":"0","icon":"icon2"}`},
+		{num: -123.456, format: "%.1f", icon: "", want: `{"text":"-123.5"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("num=%v,format=%s,icon=%s", tt.num, tt.format, tt.icon), func(t *testing.T) {
+			got := creatingFormattedPublishMessage(tt.num, tt.format, tt.icon)
+			if string(got) != tt.want {
+				t.Errorf("creatingFormattedPublishMessage() = %v, want %v", string(got), tt.want)
+			}
+		})
 	}
 }
