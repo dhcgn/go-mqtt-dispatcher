@@ -1,0 +1,10 @@
+mqtt:
+  broker: mqtt://192.168.3.10:1883
+
+topics:
+  - subscribe: "shellies/shellypro3em-0cb815fd5bac/status/em:0"
+    transform:
+      jsonPath: "$.total_act_power"
+      round: toInteger
+      outputFormat: "%v W"
+    publish: "awtrix_b77810/custom/house power"

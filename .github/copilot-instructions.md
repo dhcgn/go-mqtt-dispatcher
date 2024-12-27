@@ -1,0 +1,5 @@
+- Go Application
+- Will run mostly in a docker cotainer
+- Config files is in yaml format
+- Notable packages: 
+  - [github.com/eclipse-paho/paho.mqtt.golang](https://github.com/eclipse-paho/paho.mqtt.golang)
