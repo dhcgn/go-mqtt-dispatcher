@@ -1,4 +1,5 @@
 [![Go](https://github.com/dhcgn/go-mqtt-dispatcher/actions/workflows/go.yml/badge.svg)](https://github.com/dhcgn/go-mqtt-dispatcher/actions/workflows/go.yml)
+[![codecov](https://codecov.io/github/dhcgn/go-mqtt-dispatcher/graph/badge.svg?token=76wV1FyxEw)](https://codecov.io/github/dhcgn/go-mqtt-dispatcher)
 [![Alt](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/dhcgn/go-mqtt-dispatcher)
 
 # go-mqtt-dispatcher
