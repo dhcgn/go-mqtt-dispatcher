@@ -1,10 +1,40 @@
+[![Go](https://github.com/dhcgn/go-mqtt-dispatcher/actions/workflows/go.yml/badge.svg)](https://github.com/dhcgn/go-mqtt-dispatcher/actions/workflows/go.yml)
+[![Alt](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/dhcgn/go-mqtt-dispatcher)
+
 # go-mqtt-dispatcher
 
 This is a simple MQTT dispatcher written in Go. It listens to a MQTT topic, processes the payload and sends it to another topic.
 
-Use case: Send data to the [awtrix 3 mqtt api](https://blueforcer.github.io/awtrix3/#/api?id=example-1), the current feature [mqtt-placeholder](https://blueforcer.github.io/awtrix3/#/api?id=mqtt-placeholder) is not sufficient for all use cases.
+## Stats
 
-## Source
+![Alt](https://repobeats.axiom.co/api/embed/b1afc9cf8420a60d30dabbbfef1f245e67193a02.svg "Repobeats analytics image")
+
+## Use case:
+
+Send data to the [awtrix 3 mqtt api](https://blueforcer.github.io/awtrix3/#/api?id=example-1), the current feature [mqtt-placeholder](https://blueforcer.github.io/awtrix3/#/api?id=mqtt-placeholder) is not sufficient for all use cases.
+
+Shelly publishes on mqtt `{"total_act_power": 392.572}` and this app transforms it to `392 W` and sends it to the awtrix 3 device trough mqtt.
+
+
+## Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant Shelly
+    participant MQTT Broker
+    participant Go App
+    participant Awtrix3
+
+    Shelly->>MQTT Broker: Publish {"total_act_power": 392.572}
+    MQTT Broker->>Go App: Forward message
+    Note over Go App: Transform:<br/>- Round to integer<br/>- Add "W" unit
+    Go App->>MQTT Broker: Publish "392 W"
+    MQTT Broker->>Awtrix3: Display "392 W"
+```
+
+## Example
+
+### Source
 
 > From a Shelly Pro 3EM shellypro3em-00000000000 the value of the json property `"total_act_power"` from the topic `.../status/em:0`.
 
@@ -42,7 +72,7 @@ Payload:
 ```
 
 
-## Target
+### Target
 
 > To a awtrix 3 device, a custom app `house power` with the text `392 W`.
 
@@ -54,7 +84,7 @@ Topic: `awtrix_b77810/custom/house power`
 }
 ```
 
-### JSON Properties
+#### JSON Properties
 
 > [Source](https://github.com/Blueforcer/awtrix3/blob/4a1ad2f38198cdc89733a18a97bd6079ee286615/docs/api.md?plain=1#L166)
 
@@ -103,7 +133,7 @@ Below are the properties you can utilize in the JSON object. **All keys are opti
 | `save`           | boolean                     | Saves your custom app into flash and reloads it after boot. Avoid this for custom apps with high update frequencies because the ESP's flash memory has limited write cycles. |         | X          |              |
 | `overlay`        | string                      | Sets an effect overlay (cannot be used with global overlays).  
 
-## Config
+### Config
 
 ```yaml
 mqtt:
@@ -125,6 +155,9 @@ topics:
 ## Running with Docker
 
 Run the container by mounting your config file as a volume:
+
 ```
 docker run -v /path/to/config.yaml:/app/config.yaml mqtt-dispatcher
 ```
+
+The config file must be an absolute path!
