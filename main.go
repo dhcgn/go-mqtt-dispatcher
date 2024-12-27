@@ -51,7 +51,7 @@ func main() {
 	log.Println("Start dispatcher")
 	defer log.Println("Done")
 
-	go d.Run()
+	go d.Run(AppName, Version, Commit, BuildTime)
 
 	select {}
 }

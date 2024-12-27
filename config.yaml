@@ -1,10 +1,25 @@
 mqtt:
-  broker: mqtt://192.168.1.10:1883
+  broker: mqtt://192.168.1.1:1883
 
 topics:
-  - subscribe: "shellies/shellypro3em-00000000/status/em:0"
+  - subscribe: "shellies/shellypro3em-0000000000/status/em:0"
     transform:
       jsonPath: "$.total_act_power"
-      round: toInteger
-      outputFormat: "%v W"
-    publish: "awtrix_b00000/custom/house power"
+      outputFormat: "%.0f W"
+    publish: "awtrix_0000000000/custom/house power"
+    icon: "redplug"
+topics_accumulated:
+  - Gruop: "Solar"
+    publish: "awtrix_000000000/custom/solar power"
+    icon: "ani_sun"
+    operation: sum
+    outputFormat: "%.0f W"
+    topics:
+      - subscribe: "shellies/shellypro4pm-000000000000/status/switch:2"
+        transform:
+          jsonPath: "$.apower"
+      - subscribe: "shellies/shellyplusplugs-000000000000/status/switch:0"
+        transform:
+          jsonPath: "$.apower"
+          invert: true
+      
