@@ -115,7 +115,7 @@ topics:
   - subscribe: "shellies/shellypro3em-00000000000/status/em:0"
     transform:
       jsonPath: "$.total_act_power"
-      round: floor
+      round: toInteger
       outputFormat: "%v W"
     publish: "awtrix_b77810/custom/house power"
 ```
