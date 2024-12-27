@@ -28,6 +28,8 @@ var (
 
 func main() {
 	fmt.Printf("%s %s (commit: %s, built at: %s)\n", AppName, Version, Commit, BuildTime)
+	fmt.Println("Url: https://github.com/dhcgn/go-mqtt-dispatcher")
+	fmt.Println()
 
 	flag.Parse()
 	if *confgFlag == "" {
