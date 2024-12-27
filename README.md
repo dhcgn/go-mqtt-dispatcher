@@ -157,7 +157,7 @@ topics:
 Run the container by mounting your config file as a volume:
 
 ```
-docker run -v /path/to/config.yaml:/app/config.yaml mqtt-dispatcher
+docker run -v /path/to/config.yaml:/app/config.yaml dhcgn/mqtt-dispatcher:latest
 ```
 
 The config file must be an absolute path!
