@@ -23,7 +23,7 @@ var (
 )
 
 var (
-	confgFlag = flag.String("config", "config.yaml", "config file path")
+	confgFlag = flag.String("config", "", "config file path, e.g. config.yaml")
 )
 
 func main() {
