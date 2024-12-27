@@ -17,7 +17,9 @@ const (
 )
 
 var (
-	Version = "0.0.1"
+	Version   = "dev"
+	Commit    = "none"
+	BuildTime = "unknown"
 )
 
 var (
@@ -25,7 +27,7 @@ var (
 )
 
 func main() {
-	fmt.Println(AppName, Version)
+	fmt.Printf("%s %s (commit: %s, built at: %s)\n", AppName, Version, Commit, BuildTime)
 
 	flag.Parse()
 	if *confgFlag == "" {

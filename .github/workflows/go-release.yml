@@ -1,0 +1,84 @@
+name: Go
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write  # Required for creating releases
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history and tags
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+
+    - name: Build
+      run: |
+        # Get version info (format: v1.0.0-5-g1234567 or v1.0.0)
+        GIT_DESC=$(git describe --tags 2>/dev/null || echo "v0.0.0")
+        
+        # Parse version components
+        BASE_TAG=$(echo $GIT_DESC | cut -d- -f1)
+        COMMITS_SINCE=$(echo $GIT_DESC | grep -o '[0-9]*-g[0-9a-f]*$' | cut -d- -f1)
+        
+        # Build final version string
+        if [ -n "$COMMITS_SINCE" ]; then
+          VERSION="${BASE_TAG}+${COMMITS_SINCE}"
+        else
+          VERSION="${BASE_TAG}"
+        fi
+        
+        COMMIT=$(git rev-parse --short HEAD)
+        BUILDTIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+        
+        go build -v -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildTime=${BUILDTIME}" ./...
+
+    - name: Build Release Artifacts
+      run: |
+        # Create artifacts directory
+        mkdir -p artifacts
+        
+        # Build for different platforms
+        PLATFORMS=("linux/amd64" "windows/amd64" "darwin/amd64" "linux/arm64")
+        
+        for PLATFORM in "${PLATFORMS[@]}"; do
+          # Split platform into OS and ARCH
+          IFS="/" read -r OS ARCH <<< "${PLATFORM}"
+          
+          # Set output filename based on OS
+          if [ "${OS}" == "windows" ]; then
+            OUTPUT="artifacts/mqtt-dispatcher-${OS}-${ARCH}.exe"
+          else
+            OUTPUT="artifacts/mqtt-dispatcher-${OS}-${ARCH}"
+          fi
+          
+          # Build binary
+          GOOS=${OS} GOARCH=${ARCH} go build -v \
+            -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildTime=${BUILDTIME}" \
+            -o "${OUTPUT}" ./...
+        done
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/*
+        name: Release ${{ github.ref_name }}
+        body: |
+          Release ${{ github.ref_name }}
+          
+          Automated release created by GitHub Actions.
+        draft: false
+        prerelease: false
+
+    - name: Test
+      run: go test -v ./...
