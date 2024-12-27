@@ -54,7 +54,7 @@ func (d *Dispatcher) handleMessage(topic types.TopicConfig) func(client mqtt.Cli
 		jsonData := creatingPublishMessage(val, topic.Transform.OutputFormat, topic.Icon)
 
 		// Log
-		log.Printf("TOPIC Acc: %s Publish: %s\n", topic.Subscribe, jsonData)
+		log.Printf("TOPIC: %s Publish: %s\n", topic.Subscribe, jsonData)
 
 		// Publish
 		token := client.Publish(topic.Publish, 0, true, jsonData)
