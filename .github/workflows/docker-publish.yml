@@ -11,6 +11,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get build info
+        id: build_info
+        run: |
+          echo "version=$(git describe --tags)" >> $GITHUB_OUTPUT
+          echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "buildtime=$(date -u '+%Y-%m-%d_%H:%M:%S')" >> $GITHUB_OUTPUT
       
       - name: Docker meta
         id: meta
@@ -31,4 +40,9 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
+          file: ./Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.build_info.outputs.version }}
+            COMMIT=${{ steps.build_info.outputs.commit }}
+            BUILDTIME=${{ steps.build_info.outputs.buildtime }}
