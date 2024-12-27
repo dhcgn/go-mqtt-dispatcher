@@ -64,7 +64,7 @@ func (d *Dispatcher) handleAccMessage(topicsAccumulated types.TopicsAccumulatedC
 
 		d.state[topicsAccumulated.Group][topic.Subscribe] = val
 
-		res := d.accumulation(topicsAccumulated.Operation, topicsAccumulated.Group)
+		res := d.accumulatFromStorage(topicsAccumulated.Operation, topicsAccumulated.Group)
 		jsonData := creatingFormattedPublishMessage(res, topicsAccumulated.OutputFormat, topicsAccumulated.Icon)
 
 		// Log
@@ -76,7 +76,7 @@ func (d *Dispatcher) handleAccMessage(topicsAccumulated types.TopicsAccumulatedC
 	}
 }
 
-func (d *Dispatcher) accumulation(op, group string) float64 {
+func (d *Dispatcher) accumulatFromStorage(op, group string) float64 {
 	var res float64 = 0
 	if op == "sum" {
 		var sum float64 = 0
