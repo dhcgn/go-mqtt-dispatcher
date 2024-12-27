@@ -131,7 +131,7 @@ func (d *Dispatcher) Run(ids ...string) {
 
 	for _, topicAcc := range d.config.TopicsAccumulated {
 		for _, topic := range topicAcc.Topics {
-			log.Println("Subscribing to topic for accumaltion: ", topic.Subscribe)
+			log.Println("Subscribing to topic for accumulation: ", topic.Subscribe)
 			client.Subscribe(topic.Subscribe, 0, d.handleAccMessage(topicAcc, topic))
 		}
 	}
