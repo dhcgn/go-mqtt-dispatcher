@@ -9,6 +9,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [
+          { os: 'linux', arch: 'amd64', suffix: '' },
+          { os: 'windows', arch: 'amd64', suffix: '.exe' }
+        ]
     steps:
     - uses: actions/checkout@v4
       with:
@@ -19,31 +25,26 @@ jobs:
       with:
         go-version: '1.23'
 
-    - name: Build
+    - name: Build ${{ matrix.target.os }}
+      env:
+        GOOS: ${{ matrix.target.os }}
+        GOARCH: ${{ matrix.target.arch }}
       run: |
-        # Get version info (format: v1.0.0-5-g1234567 or v1.0.0)
-        GIT_DESC=$(git describe --tags 2>/dev/null || echo "v0.0.0")
-        
-        # Parse version components
-        BASE_TAG=$(echo $GIT_DESC | cut -d- -f1)
-        COMMITS_SINCE=$(echo $GIT_DESC | grep -o '[0-9]*-g[0-9a-f]*$' | cut -d- -f1)
-        
-        # Build final version string
-        if [ -n "$COMMITS_SINCE" ]; then
-          VERSION="${BASE_TAG}+${COMMITS_SINCE}"
-        else
-          VERSION="${BASE_TAG}"
-        fi
-        
-        COMMIT=$(git rev-parse --short HEAD)
-        BUILDTIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
-        
-        go build -v -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildTime=${BUILDTIME}" ./...
+        chmod +x ./scripts/build.sh
+        ./scripts/build.sh go-mqtt-dispatcher-${{ matrix.target.os }}-${{ matrix.target.arch }}${{ matrix.target.suffix }}
 
     - name: Test
+      if: matrix.target.os == 'linux'
       run: go test -coverprofile=coverage.txt -v ./...
 
     - name: Upload coverage reports to Codecov
+      if: matrix.target.os == 'linux'
       uses: codecov/codecov-action@v5
       with:
-        token: ${{ secrets.CODECOV_TOKEN }}      
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: binaries-${{ matrix.target.os }}-${{ matrix.target.arch }}
+        path: go-mqtt-dispatcher-${{ matrix.target.os }}-${{ matrix.target.arch }}${{ matrix.target.suffix }}
