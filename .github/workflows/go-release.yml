@@ -11,12 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target: [
-          { os: 'linux', arch: 'amd64', suffix: '' },
-          { os: 'windows', arch: 'amd64', suffix: '.exe' }
-        ]
     steps:
     - uses: actions/checkout@v4
       with:
