@@ -4,7 +4,30 @@
 
 # go-mqtt-dispatcher
 
-This is a simple MQTT dispatcher written in Go. It listens to a MQTT topic, processes the payload and sends it to another topic.
+A lightweight Go application that transforms MQTT messages between devices. It subscribes to source topics, processes numeric data using JSONPath extraction and formatting, and republishes the transformed messages to target topics compatible to **Awtrix 3**.
+
+Key features:
+
+- Transforms numeric MQTT payloads using JSONPath
+- Supports message accumulation from multiple sources
+- Formats output with customizable templates
+- Designed for IoT dashboard displays like Awtrix 3
+- Works with any MQTT-capable device as data source
+
+Ideal for:
+
+- Converting raw sensor data to human-readable formats
+- Aggregating values from multiple IoT devices
+- Creating formatted displays from MQTT data streams
+- Real-time data transformation pipelines
+
+```yaml
+# Example: Transform temperature reading
+Input:  {"sensor": {"temp": 23.456}}
+Output: {"text": "23°C"} # Format of Awtrix 3
+```
+
+Docker image available for easy deployment.
 
 ## Stats
 
