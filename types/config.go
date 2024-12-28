@@ -21,11 +21,16 @@ type TransformConfig struct {
 	OutputFormat string `yaml:"outputFormat"`
 }
 
+type IgnoreConfig struct {
+	LessThan *float64 `yaml:"lessThan,omitempty"`
+}
+
 type TopicConfig struct {
 	Subscribe string          `yaml:"subscribe"`
 	Transform TransformConfig `yaml:"transform"`
 	Publish   string          `yaml:"publish"`
 	Icon      string          `yaml:"icon"`
+	Ignore    *IgnoreConfig   `yaml:"ignore,omitempty"`
 }
 
 func (t TransformConfig) GetJsonPath() string {
@@ -59,7 +64,22 @@ type TopicsAccumulatedConfig struct {
 	Icon         string                   `yaml:"icon"`
 	Operation    string                   `yaml:"operation"`
 	OutputFormat string                   `yaml:"outputFormat"`
+	Ignore       *IgnoreConfig            `yaml:"ignore,omitempty"`
 	Topics       []AccumulatedTopicConfig `yaml:"topics"`
+}
+
+func (t TopicsAccumulatedConfig) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {
+	if t.Ignore != nil && t.Ignore.LessThan != nil {
+		return true, *t.Ignore.LessThan
+	}
+	return false, 0
+}
+
+func (t TopicConfig) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {
+	if t.Ignore != nil && t.Ignore.LessThan != nil {
+		return true, *t.Ignore.LessThan
+	}
+	return false, 0
 }
 
 type Config struct {
