@@ -14,14 +14,16 @@ import (
 )
 
 type Dispatcher struct {
-	config *types.Config
-	state  map[string]map[string]float64
+	config     *types.Config
+	state      map[string]map[string]float64
+	mqttClient MqttClient
 }
 
-func NewDispatcher(config *types.Config) (*Dispatcher, error) {
+func NewDispatcher(config *types.Config, mqttClient MqttClient) (*Dispatcher, error) {
 	d := &Dispatcher{
-		config: config,
-		state:  make(map[string]map[string]float64),
+		config:     config,
+		state:      make(map[string]map[string]float64),
+		mqttClient: mqttClient,
 	}
 
 	// Initialize inner maps for each accumulated topic group
@@ -37,9 +39,9 @@ type publishMessage struct {
 	Icon string `json:"icon,omitempty"`
 }
 
-func (d *Dispatcher) handleMessage(topic types.TopicConfig) func(client mqtt.Client, msg mqtt.Message) {
-	return func(client mqtt.Client, msg mqtt.Message) {
-		val, err := extractToFloat(msg.Payload(), topic.Transform)
+func (d *Dispatcher) handleMessage(topic types.TopicConfig) func([]byte) {
+	return func(payload []byte) {
+		val, err := extractToFloat(payload, topic.Transform)
 		if err != nil {
 			return
 		}
@@ -52,18 +54,13 @@ func (d *Dispatcher) handleMessage(topic types.TopicConfig) func(client mqtt.Cli
 			jsonData = creatingFormattedPublishMessage(val, topic.Transform.OutputFormat, topic.Icon)
 		}
 
-		// Log
-		log.Printf("TOPIC: %s Publish: %s\n", topic.Subscribe, jsonData)
-
-		// Publish
-		token := client.Publish(topic.Publish, 0, true, jsonData)
-		token.Wait()
+		_ = d.mqttClient.Publish(topic.Publish, jsonData)
 	}
 }
 
-func (d *Dispatcher) handleAccMessage(topicsAccumulated types.TopicsAccumulatedConfig, topic types.AccumulatedTopicConfig) func(client mqtt.Client, msg mqtt.Message) {
-	return func(client mqtt.Client, msg mqtt.Message) {
-		val, err := extractToFloat(msg.Payload(), topic.Transform)
+func (d *Dispatcher) handleAccMessage(topicsAccumulated types.TopicsAccumulatedConfig, topic types.AccumulatedTopicConfig) func([]byte) {
+	return func(payload []byte) {
+		val, err := extractToFloat(payload, topic.Transform)
 		if err != nil {
 			return
 		}
@@ -79,12 +76,7 @@ func (d *Dispatcher) handleAccMessage(topicsAccumulated types.TopicsAccumulatedC
 			jsonData = creatingFormattedPublishMessage(val, topicsAccumulated.OutputFormat, topicsAccumulated.Icon)
 		}
 
-		// Log
-		log.Printf("TOPIC Acc: %s Publish: %s\n", topic.Subscribe, jsonData)
-
-		// Publish
-		token := client.Publish(topicsAccumulated.Publish, 0, true, jsonData)
-		token.Wait()
+		_ = d.mqttClient.Publish(topicsAccumulated.Publish, jsonData)
 	}
 }
 
@@ -135,22 +127,35 @@ func (d *Dispatcher) Run(ids ...string) {
 	}
 
 	client := connect(id, d.config.Mqtt.BrokerAsUri)
+	mqttClient := NewPahoMqttClient(client)
+	d.mqttClient = mqttClient
 
+	subscribe(d)
+}
+
+func subscribe(d *Dispatcher) {
 	for _, topic := range d.config.Topics {
 		log.Println("Subscribing to topic: ", topic.Subscribe)
-		client.Subscribe(topic.Subscribe, 0, d.handleMessage(topic))
+		err := d.mqttClient.Subscribe(topic.Subscribe, d.handleMessage(topic))
+		if err != nil {
+			log.Printf("Error subscribing to topic %s: %v", topic.Subscribe, err)
+		}
 	}
 
 	for _, topicAcc := range d.config.TopicsAccumulated {
 		for _, topic := range topicAcc.Topics {
 			log.Println("Subscribing to topic for accumulation: ", topic.Subscribe)
-			client.Subscribe(topic.Subscribe, 0, d.handleAccMessage(topicAcc, topic))
+			err := d.mqttClient.Subscribe(topic.Subscribe, d.handleAccMessage(topicAcc, topic))
+			if err != nil {
+				log.Printf("Error subscribing to topic %s: %v", topic.Subscribe, err)
+			}
 		}
 	}
 }
 
 func extractToFloat(input []byte, tranform types.Transform) (float64, error) {
 	var res interface{}
+	var err error
 	if tranform.GetJsonPath() != "" {
 		var json_data interface{}
 		json.Unmarshal([]byte(input), &json_data)
@@ -162,7 +167,11 @@ func extractToFloat(input []byte, tranform types.Transform) (float64, error) {
 			return 0, err
 		}
 	} else {
-		res = input
+		res, err = strconv.ParseFloat(string(input), 64)
+		if err != nil {
+			log.Println("transformAccJsonPath ParseError, error: ", err, " input: ", string(input), " jsonPath: ", tranform.GetJsonPath())
+			return 0, err
+		}
 	}
 	// Parse to float
 	val, err := strconv.ParseFloat(fmt.Sprintf("%v", res), 64)

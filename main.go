@@ -8,7 +8,9 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"time"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"gopkg.in/yaml.v2"
 )
 
@@ -40,14 +42,17 @@ func main() {
 	// Load config
 	config, err := LoadConfig(*confgFlag)
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	d, err := dispatcher.NewDispatcher(config)
+	// Create MQTT client
+	client := connect(AppName, config.Mqtt.BrokerAsUri)
+	mqttClient := dispatcher.NewPahoMqttClient(client)
+
+	// Create dispatcher with MQTT client
+	d, err := dispatcher.NewDispatcher(config, mqttClient)
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalf("Failed to create dispatcher: %v", err)
 	}
 
 	log.Println("Start dispatcher")
@@ -56,6 +61,24 @@ func main() {
 	go d.Run(AppName, Version, Commit, BuildTime)
 
 	select {}
+}
+
+func connect(clientId string, uri *url.URL) mqtt.Client {
+	opts := mqtt.NewClientOptions()
+	opts.AddBroker(fmt.Sprintf("tcp://%s", uri.Host))
+	// opts.SetUsername(uri.User.Username())
+	// password, _ := uri.User.Password()
+	// opts.SetPassword(password)
+	opts.SetClientID(clientId)
+
+	client := mqtt.NewClient(opts)
+	token := client.Connect()
+	for !token.WaitTimeout(3 * time.Second) {
+	}
+	if err := token.Error(); err != nil {
+		log.Fatal(err)
+	}
+	return client
 }
 
 func LoadConfig(path string) (*types.Config, error) {
