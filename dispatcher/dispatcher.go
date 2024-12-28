@@ -44,7 +44,13 @@ func (d *Dispatcher) handleMessage(topic types.TopicConfig) func(client mqtt.Cli
 			return
 		}
 
-		jsonData := creatingFormattedPublishMessage(val, topic.Transform.OutputFormat, topic.Icon)
+		var jsonData []byte
+		// Check for ignore, than delete topic with an empty payload
+		if has, lt := topic.GetIgnoreLessThanConfig(); has && val < lt {
+			jsonData = []byte{}
+		} else {
+			jsonData = creatingFormattedPublishMessage(val, topic.Transform.OutputFormat, topic.Icon)
+		}
 
 		// Log
 		log.Printf("TOPIC: %s Publish: %s\n", topic.Subscribe, jsonData)
@@ -63,9 +69,15 @@ func (d *Dispatcher) handleAccMessage(topicsAccumulated types.TopicsAccumulatedC
 		}
 
 		d.state[topicsAccumulated.Group][topic.Subscribe] = val
+		val = d.accumulatFromStorage(topicsAccumulated.Operation, topicsAccumulated.Group)
 
-		res := d.accumulatFromStorage(topicsAccumulated.Operation, topicsAccumulated.Group)
-		jsonData := creatingFormattedPublishMessage(res, topicsAccumulated.OutputFormat, topicsAccumulated.Icon)
+		var jsonData []byte
+		// Check for ignore, than delete topic with an empty payload
+		if has, lt := topicsAccumulated.GetIgnoreLessThanConfig(); has && val < lt {
+			jsonData = []byte{}
+		} else {
+			jsonData = creatingFormattedPublishMessage(val, topicsAccumulated.OutputFormat, topicsAccumulated.Icon)
+		}
 
 		// Log
 		log.Printf("TOPIC Acc: %s Publish: %s\n", topic.Subscribe, jsonData)

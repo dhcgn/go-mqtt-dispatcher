@@ -9,17 +9,18 @@ topics:
     publish: "awtrix_b77810/custom/house power"
     icon: "redplug"
 topics_accumulated:
-  - Gruop: "Solar"
+  - group: "Solar"
     publish: "awtrix_b77810/custom/solar power"
     icon: "ani_sun"
     operation: sum
     outputFormat: "%.0f W"
+    ignore:
+      lessThan: 2.0
     topics:
       - subscribe: "shellies/shellypro4pm-ec62609fdd48/status/switch:2"
         transform:
           jsonPath: "$.apower"
+          invert: true
       - subscribe: "shellies/shellyplusplugs-a0a3b3e8c4c8/status/switch:0"
         transform:
           jsonPath: "$.apower"
-          invert: true
-      

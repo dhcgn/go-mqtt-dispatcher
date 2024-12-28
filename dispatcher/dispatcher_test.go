@@ -63,3 +63,48 @@ func TestCreatingFormattedPublishMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestNewDispatcher(t *testing.T) {
+	// Test case 1: Valid configuration with accumulated topics
+	config := &types.Config{
+		TopicsAccumulated: []types.TopicsAccumulatedConfig{
+			{Group: "group1"},
+			{Group: "group2"},
+		},
+	}
+	d, err := NewDispatcher(config)
+	if err != nil {
+		t.Fatalf("Failed to create dispatcher: %v", err)
+	}
+
+	if d.config != config {
+		t.Errorf("Expected config %v, got %v", config, d.config)
+	}
+
+	if len(d.state) != 2 {
+		t.Errorf("Expected state map length 2, got %d", len(d.state))
+	}
+
+	if _, exists := d.state["group1"]; !exists {
+		t.Errorf("Expected group1 to be initialized in state map")
+	}
+
+	if _, exists := d.state["group2"]; !exists {
+		t.Errorf("Expected group2 to be initialized in state map")
+	}
+
+	// Test case 2: Valid configuration with no accumulated topics
+	config = &types.Config{}
+	d, err = NewDispatcher(config)
+	if err != nil {
+		t.Fatalf("Failed to create dispatcher: %v", err)
+	}
+
+	if d.config != config {
+		t.Errorf("Expected config %v, got %v", config, d.config)
+	}
+
+	if len(d.state) != 0 {
+		t.Errorf("Expected state map length 0, got %d", len(d.state))
+	}
+}
