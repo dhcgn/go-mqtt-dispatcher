@@ -28,6 +28,7 @@ topics_accumulated:
 # See https://iot.hdev.io/ and https://gist.github.com/dhcgn/80bb8b748f56475922e204d5b84017e0
 http:
   - url: https://iot.hdev.io/d/0000000000000000000000000000000000000000000000000000000/json
+    interval_sec: 60
     transform:
       jsonPath: "$.priceInfo.current"
       outputFormat: "%.2f"

@@ -13,6 +13,7 @@ Key features:
 - Formats output with customizable templates
 - Designed for IoT dashboard displays like Awtrix 3
 - Works with any MQTT-capable device as data source
+- Data can also be fetched via HTTP in a set interval
 
 Ideal for:
 
@@ -153,20 +154,32 @@ topics:
     publish: "awtrix_0000000000/custom/house power"
     icon: "redplug"
 topics_accumulated:
-  - Gruop: "Solar"
+  - group: "Solar"
     publish: "awtrix_000000000/custom/solar power"
     icon: "ani_sun"
     operation: sum
     outputFormat: "%.0f W"
+    ignore:
+      lessThan: 2.0
     topics:
       - subscribe: "shellies/shellypro4pm-000000000000/status/switch:2"
         transform:
           jsonPath: "$.apower"
+          invert: true
       - subscribe: "shellies/shellyplusplugs-000000000000/status/switch:0"
         transform:
           jsonPath: "$.apower"
-          invert: true
-      
+
+# See https://iot.hdev.io/ and https://gist.github.com/dhcgn/80bb8b748f56475922e204d5b84017e0
+http:
+  - url: https://iot.hdev.io/d/0000000000000000000000000000000000000000000000000000000/json
+    interval_sec: 60
+    transform:
+      jsonPath: "$.priceInfo.current"
+      outputFormat: "%.2f"
+    publish: "awtrix_b77810/custom/tibber price"
+    icon: "tibber"
+
 ```
 
 # MQTT Dispatcher
@@ -175,7 +188,7 @@ topics_accumulated:
 
 Run the container by mounting your config file as a volume:
 
-```
+```bash
 docker run -v /path/to/config.yaml:/app/config.yaml dhcgn/mqtt-dispatcher:latest
 ```
 
