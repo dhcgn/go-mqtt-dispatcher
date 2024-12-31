@@ -24,3 +24,12 @@ topics_accumulated:
       - subscribe: "shellies/shellyplusplugs-000000000000/status/switch:0"
         transform:
           jsonPath: "$.apower"
+
+# See https://iot.hdev.io/ and https://gist.github.com/dhcgn/80bb8b748f56475922e204d5b84017e0
+http:
+  - url: https://iot.hdev.io/d/0000000000000000000000000000000000000000000000000000000/json
+    transform:
+      jsonPath: "$.priceInfo.current"
+      outputFormat: "%.2f"
+    publish: "awtrix_b77810/custom/tibber price"
+    icon: "tibber"

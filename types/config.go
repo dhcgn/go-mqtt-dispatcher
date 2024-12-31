@@ -82,8 +82,17 @@ func (t TopicConfig) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan
 	return false, 0
 }
 
+type HttpConfig struct {
+	Url         string          `yaml:"url"`
+	IntervalSec int             `yaml:"interval_sec"`
+	Transform   TransformConfig `yaml:"transform"`
+	Publish     string          `yaml:"publish"`
+	Icon        string          `yaml:"icon"`
+}
+
 type Config struct {
 	Mqtt              MqttConfig                `yaml:"mqtt"`
 	Topics            []TopicConfig             `yaml:"topics"`
 	TopicsAccumulated []TopicsAccumulatedConfig `yaml:"topics_accumulated"`
+	Http              []HttpConfig              `yaml:"http"`
 }
