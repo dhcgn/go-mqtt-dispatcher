@@ -10,7 +10,7 @@ import (
 func TestAccumulatFromStorage(t *testing.T) {
 	mockClient := NewMockMqttClient()
 	config := &types.Config{}
-	d, err := NewDispatcher(config, mockClient)
+	d, err := NewDispatcherMqtt(config, mockClient, func(s string) {})
 	if err != nil {
 		t.Fatalf("Failed to create dispatcher: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestCreatingFormattedPublishMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("num=%v,format=%s,icon=%s", tt.num, tt.format, tt.icon), func(t *testing.T) {
-			got := creatingFormattedPublishMessage(tt.num, tt.format, tt.icon)
+			got := creatingFormattedPublishMessage(tt.num, tt.format, tt.icon, func(s string) {})
 			if string(got) != tt.want {
 				t.Errorf("creatingFormattedPublishMessage() = %v, want %v", string(got), tt.want)
 			}
@@ -75,7 +75,7 @@ func TestNewDispatcher(t *testing.T) {
 		},
 	}
 
-	d, err := NewDispatcher(config, mockClient)
+	d, err := NewDispatcherMqtt(config, mockClient, func(s string) {})
 	if err != nil {
 		t.Fatalf("Failed to create dispatcher: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestNewDispatcher(t *testing.T) {
 
 	// Test case 2: Empty configuration
 	emptyConfig := &types.Config{}
-	d, err = NewDispatcher(emptyConfig, mockClient)
+	d, err = NewDispatcherMqtt(emptyConfig, mockClient, func(s string) {})
 	if err != nil {
 		t.Fatalf("Failed to create dispatcher with empty config: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestHandleMessage(t *testing.T) {
 			config := &types.Config{
 				Topics: []types.TopicConfig{tt.topic},
 			}
-			d, _ := NewDispatcher(config, mockClient)
+			d, _ := NewDispatcherMqtt(config, mockClient, func(s string) {})
 
 			// Subscribe to topics
 			err := d.mqttClient.Subscribe(tt.topic.Subscribe, d.handleMessage(tt.topic))
@@ -208,7 +208,7 @@ func TestHandleAccMessage(t *testing.T) {
 		},
 	}
 
-	d, _ := NewDispatcher(config, mockClient)
+	d, _ := NewDispatcherMqtt(config, mockClient, func(s string) {})
 
 	// Subscribe to topics
 	for _, topicAcc := range config.TopicsAccumulated {
@@ -256,7 +256,7 @@ func TestSubscribe(t *testing.T) {
 		},
 	}
 
-	d, err := NewDispatcher(config, mockClient)
+	d, err := NewDispatcherMqtt(config, mockClient, func(s string) {})
 	if err != nil {
 		t.Fatalf("Failed to create dispatcher: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestExtractToFloat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := extractToFloat(tt.input, tt.transform)
+			got, err := extractToFloat(tt.input, tt.transform, func(s string) {})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("extractToFloat() error = %v, wantErr %v", err, tt.wantErr)
 				return

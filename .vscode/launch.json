@@ -12,7 +12,7 @@
             "program": "${workspaceFolder}/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/config.prodution.yaml"
+                "${workspaceFolder}/secrets/config.prodution.yaml"
             ]
         }
     ]
