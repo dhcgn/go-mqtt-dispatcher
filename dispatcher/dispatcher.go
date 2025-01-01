@@ -1,48 +1,29 @@
 package dispatcher
 
-import (
-	"errors"
-	"fmt"
+import "go-mqtt-dispatcher/types"
 
-	"github.com/dop251/goja"
-)
-
-type publishMessage struct {
-	Text  string `json:"text"`
-	Icon  string `json:"icon,omitempty"`
-	Color string `json:"color,omitempty"`
+type Dispatcher struct {
 }
 
-func createColorCallback(script string) (func(float64) (string, error), error) {
-	if script == "" {
-		return nil, errors.New("Empty script")
-	}
+func NewDispatcher(entries *[]types.Entry, mqttClient MqttClient, log func(s string)) (*Dispatcher, error) {
+	return &Dispatcher{}, nil
+}
 
-	vm := goja.New()
-	_, err := vm.RunString(script)
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error running color script: %v", err))
-	}
+// Run starts the dispatcher
+//
+// 1. Iterate over all entries
+// 2. Create a event listener for each type of MqttSource or HttpSource
+// 3. Create a callback function for each event listener
+func (d *Dispatcher) Run() {
 
-	get_color, ok := goja.AssertFunction(vm.Get("get_color"))
-	if !ok {
-		return nil, errors.New("Error getting get_color function from script")
-	}
-	res, err := get_color(goja.Undefined(), vm.ToValue(1.0))
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error running color script: %v", err))
-	}
+}
 
-	hexcode := res.String()
-	if len(hexcode) != 7 || hexcode[0] != '#' {
-		return nil, errors.New("Invalid hex color code")
-	}
+// callback is called when a new event is received
+//
+// 1. Tranform the payload to a float64, use types.TransformDefinition
+// 2. If Accumulated, store the state in the dispatcher, and calculate the new value (use 'func (e Entry) MustAccumulate()')
+// 3. Create a formatted message with OutputFormat
+// 4. Create a message for TopicsToPublish with the formatted message and optional icon and color
+func (d *Dispatcher) callback(payload []byte, entry types.Entry, publish func(string, []byte)) {
 
-	return func(value float64) (string, error) {
-		res, err := get_color(goja.Undefined(), vm.ToValue(value))
-		if err != nil {
-			return "", err
-		}
-		return res.String(), nil
-	}, nil
 }

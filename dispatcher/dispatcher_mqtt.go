@@ -12,19 +12,19 @@ import (
 	"github.com/oliveagle/jsonpath"
 )
 
-type Dispatcher struct {
-	entries    *[]types.MqttEntry
+type DispatcherMqtt struct {
+	entries    *[]types.Entry
 	state      map[string]map[string]float64
 	mqttClient MqttClient
 	log        func(string)
 }
 
-func NewDispatcherMqtt(mqttEntries *[]types.MqttEntry, mqttClient MqttClient, log func(string)) (*Dispatcher, error) {
+func NewDispatcherMqtt(mqttEntries *[]types.Entry, mqttClient MqttClient, log func(string)) (*DispatcherMqtt, error) {
 	if log == nil {
 		log = func(s string) {}
 	}
 
-	d := &Dispatcher{
+	d := &DispatcherMqtt{
 		entries:    mqttEntries,
 		state:      make(map[string]map[string]float64),
 		mqttClient: mqttClient,
@@ -50,7 +50,7 @@ func NewDispatcherMqtt(mqttEntries *[]types.MqttEntry, mqttClient MqttClient, lo
 	return d, nil
 }
 
-func (d *Dispatcher) handleMessage(topic types.MqttTopicDefinition, accu bool) func([]byte) {
+func (d *DispatcherMqtt) handleMessage(topic types.MqttTopicDefinition, accu bool) func([]byte) {
 	return func(payload []byte) {
 		val, err := extractToFloat(payload, topic.Transform, d.log)
 		if err != nil {
@@ -69,7 +69,7 @@ func (d *Dispatcher) handleMessage(topic types.MqttTopicDefinition, accu bool) f
 	}
 }
 
-func (d *Dispatcher) handleAccMessage(topicsAccumulated types.TopicsAccumulatedConfig, topic types.AccumulatedTopicConfig) func([]byte) {
+func (d *DispatcherMqtt) handleAccMessage(topicsAccumulated types.TopicsAccumulatedConfig, topic types.AccumulatedTopicConfig) func([]byte) {
 	return func(payload []byte) {
 		val, err := extractToFloat(payload, topic.Transform, d.log)
 		if err != nil {
@@ -91,7 +91,7 @@ func (d *Dispatcher) handleAccMessage(topicsAccumulated types.TopicsAccumulatedC
 	}
 }
 
-func (d *Dispatcher) accumulatFromStorage(op, group string) float64 {
+func (d *DispatcherMqtt) accumulatFromStorage(op, group string) float64 {
 	var res float64 = 0
 	if op == "sum" {
 		var sum float64 = 0
@@ -136,11 +136,11 @@ func creatingFormattedPublishMessage(num float64, format string, icon string, co
 	return jsonData
 }
 
-func (d *Dispatcher) Run(ids ...string) {
+func (d *DispatcherMqtt) Run(ids ...string) {
 	subscribe(d)
 }
 
-func subscribe(d *Dispatcher) {
+func subscribe(d *DispatcherMqtt) {
 	for _, entry := range *d.entries {
 		name := entry.Name
 		accumulated := len(entry.TopicsToSubscribe) > 1

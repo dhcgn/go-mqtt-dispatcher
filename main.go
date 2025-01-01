@@ -49,6 +49,16 @@ func main() {
 	client := connect(AppName, config.Mqtt.BrokerAsUri)
 	mqttClient := dispatcher.NewPahoMqttClient(client)
 
+	// NEW START
+
+	d, err := dispatcher.NewDispatcher(&config.DispatcherEntries, mqttClient, func(s string) { log.Println("Disp: " + s) })
+	if err != nil {
+		log.Fatalf("Failed to create dispatcher: %v", err)
+	}
+	d.Run()
+
+	// NEW ENC
+
 	// Create dispatcher with MQTT client
 	dispatchermqtt, err := dispatcher.NewDispatcherMqtt(&config.DispatcherConfig.Mqtt, mqttClient, func(s string) {
 		log.Println("Disp.MQTT: " + s)

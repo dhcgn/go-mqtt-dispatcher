@@ -31,6 +31,7 @@ func NewDispatcherHttp(httpEntries *[]types.HttpEntry, mqttClient MqttClient, lo
 	}
 
 	// Check ColorScript in each types.HttpConfig an set callback
+	// TODO Move to deserializing of the config
 	for cfg_i, cfg := range *httpEntries {
 		if cfg.ColorScript != "" {
 			colorCallback, err := createColorCallback(cfg.ColorScript)
