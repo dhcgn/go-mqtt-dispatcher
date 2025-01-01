@@ -50,7 +50,7 @@ func main() {
 	mqttClient := dispatcher.NewPahoMqttClient(client)
 
 	// Create dispatcher with MQTT client
-	dispatchermqtt, err := dispatcher.NewDispatcherMqtt(config, mqttClient, func(s string) {
+	dispatchermqtt, err := dispatcher.NewDispatcherMqtt(&config.DispatcherConfig.Mqtt, mqttClient, func(s string) {
 		log.Println("Disp.MQTT: " + s)
 	})
 	if err != nil {
@@ -61,7 +61,7 @@ func main() {
 	go dispatchermqtt.Run(AppName, Version, Commit, BuildTime)
 	log.Println("mqtt dispatcher started")
 
-	dispatcherhttp, err := dispatcher.NewDispatcherHttp(&config.Http, mqttClient, func(s string) {
+	dispatcherhttp, err := dispatcher.NewDispatcherHttp(&config.DispatcherConfig.Http, mqttClient, func(s string) {
 		log.Println("Disp.HTTP: " + s)
 	})
 	if err != nil {

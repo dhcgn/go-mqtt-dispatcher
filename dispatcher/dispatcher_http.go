@@ -14,30 +14,30 @@ import (
 )
 
 type DispatcherHttp struct {
-	config     *[]types.HttpConfig
+	entries    *[]types.HttpEntry
 	mqttClient MqttClient
 	log        func(string)
 }
 
-func NewDispatcherHttp(config *[]types.HttpConfig, mqttClient MqttClient, log func(s string)) (*DispatcherHttp, error) {
+func NewDispatcherHttp(httpEntries *[]types.HttpEntry, mqttClient MqttClient, log func(s string)) (*DispatcherHttp, error) {
 	if log == nil {
 		log = func(s string) {}
 	}
 
 	d := &DispatcherHttp{
-		config:     config,
+		entries:    httpEntries,
 		mqttClient: mqttClient,
 		log:        log,
 	}
 
 	// Check ColorScript in each types.HttpConfig an set callback
-	for cfg_i, cfg := range *config {
+	for cfg_i, cfg := range *httpEntries {
 		if cfg.ColorScript != "" {
 			colorCallback, err := createColorCallback(cfg.ColorScript)
 			if err != nil {
 				log(fmt.Sprintf("Error creating color callback for config %d: %v", cfg_i, err))
 			}
-			(*d.config)[cfg_i].ColorScriptCallback = colorCallback
+			(*d.entries)[cfg_i].ColorScriptCallback = colorCallback
 		}
 	}
 
@@ -78,7 +78,7 @@ func extractToFloatHTTP(body []byte, transform types.TransformConfig) (float64, 
 }
 
 func (d *DispatcherHttp) Run() {
-	for _, cfg := range *d.config {
+	for _, cfg := range *d.entries {
 		cfg := cfg
 		go func() {
 			ticker := time.NewTicker(time.Duration(cfg.IntervalSec) * time.Second)

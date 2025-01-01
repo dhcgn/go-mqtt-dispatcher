@@ -80,8 +80,8 @@ func TestNewDispatcher(t *testing.T) {
 		t.Fatalf("Failed to create dispatcher: %v", err)
 	}
 
-	if d.config != config {
-		t.Errorf("Expected config %v, got %v", config, d.config)
+	if d.entries != config {
+		t.Errorf("Expected config %v, got %v", config, d.entries)
 	}
 
 	if len(d.state) != 2 {

@@ -2,11 +2,6 @@ package types
 
 import "net/url"
 
-type Transform interface {
-	GetJsonPath() string
-	GetInvert() bool
-}
-
 type MqttConfig struct {
 	Broker      string `yaml:"broker"`
 	BrokerAsUri *url.URL
@@ -14,94 +9,62 @@ type MqttConfig struct {
 	Password    string `yaml:"password"`
 }
 
-type TransformConfig struct {
-	JsonPath string `yaml:"jsonPath"`
-	Invert   bool   `yaml:"invert,omitempty"`
-
-	OutputFormat string `yaml:"outputFormat"`
+type TransformDefinition struct {
+	JsonPath     string `yaml:"jsonPath"`
+	Invert       bool   `yaml:"invert,omitempty"`
+	OutputFormat string `yaml:"outputFormat,omitempty"`
 }
 
-type IgnoreConfig struct {
-	LessThan *float64 `yaml:"lessThan,omitempty"`
+type MqttTopicDefinition struct {
+	Topic     string              `yaml:"topic"`
+	Transform TransformDefinition `yaml:"transform"`
 }
 
-type TopicConfig struct {
-	Subscribe string          `yaml:"subscribe"`
-	Transform TransformConfig `yaml:"transform"`
-	Publish   string          `yaml:"publish"`
-	Icon      string          `yaml:"icon"`
-	Ignore    *IgnoreConfig   `yaml:"ignore,omitempty"`
-	// ColorScript is ja Javascript with will run with full ECMAScript 5.1 support, signature must be 'function get_color(v)'
-	ColorScript         string `yaml:"color-script"`
-	ColorScriptCallback func(value float64) (string, error)
+type MqttEntry struct {
+	// Base
+	Name                string                `yaml:"name"`
+	TopicsToPublish     []MqttTopicDefinition `yaml:"topics-to-publish,omitempty"`
+	Icon                string                `yaml:"icon,omitempty"`
+	ColorScript         string                `yaml:"color-script,omitempty"`
+	ColorScriptCallback func(float64) (string, error)
+	Operation           string `yaml:"operation,omitempty"`
+
+	// Mqtt
+	TopicsToSubscribe []MqttTopicDefinition `yaml:"topics-to-subscribe,omitempty"`
 }
 
-func (t TransformConfig) GetJsonPath() string {
-	return t.JsonPath
-}
-func (t TransformConfig) GetInvert() bool {
-	return t.Invert
+type HttpUrlDefinition struct {
+	Url       string              `yaml:"url"`
+	Transform TransformDefinition `yaml:"transform"`
 }
 
-type AccumulatedTopicTransform struct {
-	JsonPath string `yaml:"jsonPath"`
-	Invert   bool   `yaml:"invert,omitempty"`
+type HttpEntry struct {
+	// Base
+	Name                string                `yaml:"name"`
+	TopicsToPublish     []MqttTopicDefinition `yaml:"topics-to-publish,omitempty"`
+	Icon                string                `yaml:"icon,omitempty"`
+	ColorScript         string                `yaml:"color-script,omitempty"`
+	ColorScriptCallback func(float64) (string, error)
+	Operation           string `yaml:"operation,omitempty"`
+
+	// Http
+	Urls        []HttpUrlDefinition `yaml:"urls"`
+	IntervalSec int                 `yaml:"interval_sec"`
 }
 
-func (t AccumulatedTopicTransform) GetJsonPath() string {
-	return t.JsonPath
-}
-
-func (t AccumulatedTopicTransform) GetInvert() bool {
-	return t.Invert
-}
-
-type AccumulatedTopicConfig struct {
-	Subscribe string                    `yaml:"subscribe"`
-	Transform AccumulatedTopicTransform `yaml:"transform"`
-}
-
-type TopicsAccumulatedConfig struct {
-	Group        string                   `yaml:"group"`
-	Publish      string                   `yaml:"publish"`
-	Icon         string                   `yaml:"icon"`
-	Operation    string                   `yaml:"operation"`
-	OutputFormat string                   `yaml:"outputFormat"`
-	Ignore       *IgnoreConfig            `yaml:"ignore,omitempty"`
-	Topics       []AccumulatedTopicConfig `yaml:"topics"`
-	// ColorScript is ja Javascript with will run with full ECMAScript 5.1 support, signature must be 'function get_color(v)'
-	ColorScript         string `yaml:"color-script"`
-	ColorScriptCallback func(value float64) (string, error)
-}
-
-func (t TopicsAccumulatedConfig) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {
-	if t.Ignore != nil && t.Ignore.LessThan != nil {
-		return true, *t.Ignore.LessThan
-	}
-	return false, 0
-}
-
-func (t TopicConfig) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {
-	if t.Ignore != nil && t.Ignore.LessThan != nil {
-		return true, *t.Ignore.LessThan
-	}
-	return false, 0
-}
-
-type HttpConfig struct {
-	Url         string          `yaml:"url"`
-	IntervalSec int             `yaml:"interval_sec"`
-	Transform   TransformConfig `yaml:"transform"`
-	Publish     string          `yaml:"publish"`
-	Icon        string          `yaml:"icon"`
-	// ColorScript is ja Javascript with will run with full ECMAScript 5.1 support, signature must be 'function get_color(v)'
-	ColorScript         string `yaml:"color-script"`
-	ColorScriptCallback func(value float64) (string, error)
+type DispatcherConfig struct {
+	Mqtt []MqttEntry `yaml:"mqtt"`
+	Http []HttpEntry `yaml:"http"`
 }
 
 type Config struct {
-	Mqtt              MqttConfig                `yaml:"mqtt"`
-	Topics            []TopicConfig             `yaml:"topics"`
-	TopicsAccumulated []TopicsAccumulatedConfig `yaml:"topics_accumulated"`
-	Http              []HttpConfig              `yaml:"http"`
+	Mqtt             MqttConfig       `yaml:"mqtt"`
+	DispatcherConfig DispatcherConfig `yaml:"dispatcher-config"`
+}
+
+func (t MqttEntry) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {
+	if t.Ignore != nil && t.Ignore.LessThan != nil {
+		return true, *t.Ignore.LessThan
+	}
+	return false, 0
 }

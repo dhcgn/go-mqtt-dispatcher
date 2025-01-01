@@ -13,55 +13,44 @@ import (
 )
 
 type Dispatcher struct {
-	config     *types.Config
+	entries    *[]types.MqttEntry
 	state      map[string]map[string]float64
 	mqttClient MqttClient
 	log        func(string)
 }
 
-func NewDispatcherMqtt(config *types.Config, mqttClient MqttClient, log func(string)) (*Dispatcher, error) {
+func NewDispatcherMqtt(mqttEntries *[]types.MqttEntry, mqttClient MqttClient, log func(string)) (*Dispatcher, error) {
 	if log == nil {
 		log = func(s string) {}
 	}
 
 	d := &Dispatcher{
-		config:     config,
+		entries:    mqttEntries,
 		state:      make(map[string]map[string]float64),
 		mqttClient: mqttClient,
 		log:        log,
 	}
 
 	// Initialize inner maps for each accumulated topic group
-	for _, topicAcc := range config.TopicsAccumulated {
-		d.state[topicAcc.Group] = make(map[string]float64)
+	for _, entry := range *mqttEntries {
+		d.state[entry.Name] = make(map[string]float64)
 	}
 
 	// Check ColorScript in each types.HttpConfig an set callback
-	for cfg_i, cfg := range config.Topics {
-		if cfg.ColorScript != "" {
-			colorCallback, err := createColorCallback(cfg.ColorScript)
+	for entry_id, entry := range *mqttEntries {
+		if entry.ColorScript != "" {
+			colorCallback, err := createColorCallback(entry.ColorScript)
 			if err != nil {
-				log(fmt.Sprintf("Error creating color callback for config %d: %v", cfg_i, err))
+				log(fmt.Sprintf("Error creating color callback for config %d: %v", entry_id, err))
 			}
-			config.Topics[cfg_i].ColorScriptCallback = colorCallback
-		}
-	}
-
-	// Check ColorScript in each types.HttpConfig an set callback
-	for cfg_i, cfg := range config.TopicsAccumulated {
-		if cfg.ColorScript != "" {
-			colorCallback, err := createColorCallback(cfg.ColorScript)
-			if err != nil {
-				log(fmt.Sprintf("Error creating color callback for config %d: %v", cfg_i, err))
-			}
-			config.TopicsAccumulated[cfg_i].ColorScriptCallback = colorCallback
+			(*mqttEntries)[entry_id].ColorScriptCallback = colorCallback
 		}
 	}
 
 	return d, nil
 }
 
-func (d *Dispatcher) handleMessage(topic types.TopicConfig) func([]byte) {
+func (d *Dispatcher) handleMessage(topic types.MqttTopicDefinition, accu bool) func([]byte) {
 	return func(payload []byte) {
 		val, err := extractToFloat(payload, topic.Transform, d.log)
 		if err != nil {
@@ -148,37 +137,21 @@ func creatingFormattedPublishMessage(num float64, format string, icon string, co
 }
 
 func (d *Dispatcher) Run(ids ...string) {
-	var id string
-	if len(ids) > 0 {
-		for _, i := range ids {
-			id += i
-		}
-	} else {
-		id = "dispatcher"
-	}
-
-	client := connect(id, d.config.Mqtt.BrokerAsUri, d.log)
-	mqttClient := NewPahoMqttClient(client)
-	d.mqttClient = mqttClient
-
 	subscribe(d)
 }
 
 func subscribe(d *Dispatcher) {
-	for _, topic := range d.config.Topics {
-		d.log(fmt.Sprintf("Subscribing to topic: %s", topic.Subscribe))
-		err := d.mqttClient.Subscribe(topic.Subscribe, d.handleMessage(topic))
-		if err != nil {
-			d.log(fmt.Sprintf("Error subscribing to topic %s: %v", topic.Subscribe, err))
-		}
-	}
+	for _, entry := range *d.entries {
+		name := entry.Name
+		accumulated := len(entry.TopicsToSubscribe) > 1
+		for _, t := range entry.TopicsToSubscribe {
+			d.log(fmt.Sprintf("%s: Subscribing to topic for accumulation: %s", name, t.Topic))
 
-	for _, topicAcc := range d.config.TopicsAccumulated {
-		for _, topic := range topicAcc.Topics {
-			d.log(fmt.Sprintf("Subscribing to topic for accumulation: %s", topic.Subscribe))
-			err := d.mqttClient.Subscribe(topic.Subscribe, d.handleAccMessage(topicAcc, topic))
-			if err != nil {
-				d.log(fmt.Sprintf("Error subscribing to topic %s: %v", topic.Subscribe, err))
+			for _, t := range entry.TopicsToSubscribe {
+				err := d.mqttClient.Subscribe(t.Topic, d.handleMessage(t, accumulated))
+				if err != nil {
+					d.log(fmt.Sprintf("Error subscribing to topic %s: %v", t.Topic, err))
+				}
 			}
 		}
 	}
