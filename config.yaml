@@ -34,3 +34,10 @@ http:
       outputFormat: "%.2f"
     publish: "awtrix_b77810/custom/tibber price"
     icon: "tibber"
+  - url: https://iot.hdev.io/d/0000000000000000000000000000000000000000000000000000000/plain-from-base64url/tibber_base64
+    interval_sec: 60
+    transform:
+      jsonPath: "$.data.viewer.homes[0].currentSubscription.priceInfo.current.total"
+      outputFormat: "%.4f"
+    publish: "awtrix_b77810/custom/tibber price"
+    icon: "tibber"
