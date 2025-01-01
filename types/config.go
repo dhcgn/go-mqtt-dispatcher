@@ -1,3 +1,5 @@
+// TODO: Evalaute all interfaces
+// TODO: Update docs for new config!
 package types
 
 import "net/url"
@@ -25,6 +27,47 @@ type MqttTopicDefinition struct {
 	Topic     string              `yaml:"topic"`
 	Transform TransformDefinition `yaml:"transform"`
 	Filter    *FilterDefinition   `yaml:"filter,omitempty"`
+}
+
+type OuputFormat interface {
+	GetOutputFormat() string
+}
+
+func (m MqttTopicDefinition) GetOutputFormat() string {
+	return m.Transform.OutputFormat
+}
+
+func (h HttpUrlDefinition) GetOutputFormat() string {
+	return h.Transform.OutputFormat
+}
+
+type Filter interface {
+	GetFilter() *FilterDefinition
+}
+
+func (m MqttTopicDefinition) GetFilter() *FilterDefinition {
+	return m.Filter
+}
+
+type Transform interface {
+	GetJsonPath() string
+	GetInvert() bool
+}
+
+func (m MqttTopicDefinition) GetJsonPath() string {
+	return m.Transform.JsonPath
+}
+
+func (m MqttTopicDefinition) GetInvert() bool {
+	return m.Transform.Invert
+}
+
+func (h HttpUrlDefinition) GetJsonPath() string {
+	return h.Transform.JsonPath
+}
+
+func (h HttpUrlDefinition) GetInvert() bool {
+	return h.Transform.Invert
 }
 
 type Entry struct {
