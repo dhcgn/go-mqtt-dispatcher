@@ -15,6 +15,11 @@ Key features:
 - Works with any MQTT-capable device as data source
 - Data can also be fetched via HTTP in a set interval
 
+Nice to have features:
+
+- Support of color functions depending on the value
+- Support of icons stored on the device
+
 Ideal for:
 
 - Converting raw sensor data to human-readable formats
@@ -153,10 +158,38 @@ topics:
       outputFormat: "%.0f W"
     publish: "awtrix_0000000000/custom/house power"
     icon: "redplug"
+    color-script: |
+      function get_color(v) {
+        if (v < 500.0) {
+          return "#32a852"; // green
+        } else if (v < 750.0) {
+          return "#FFFFFF"; // white
+        } else if (v < 900.0) {
+          return "#FFFF00"; // yellow
+        } else if (v < 1200.0) {
+          return "#FF0000"; // red
+        } else {
+          return "#FFC0CB"; // pink
+        }
+      }
 topics_accumulated:
   - group: "Solar"
     publish: "awtrix_000000000/custom/solar power"
     icon: "ani_sun"
+    color-script: |
+      function get_color(v) {
+        if (v < 100) {
+          return "#FFFFFF"; // white
+        } else if (v < 250) {
+          return "#FFA500"; // orange
+        } else if (v < 500) {
+          return "#FFFF00"; // yellow
+        } else if (v < 750) {
+          return "#008000"; // green
+        } else {
+          return "#FFC0CB"; // pink
+        }
+      }
     operation: sum
     outputFormat: "%.0f W"
     ignore:
@@ -179,6 +212,27 @@ http:
       outputFormat: "%.2f"
     publish: "awtrix_b77810/custom/tibber price"
     icon: "tibber"
+  - url: https://iot.hdev.io/d/0000000000000000000000000000000000000000000000000000000/plain-from-base64url/tibber_base64
+    interval_sec: 60
+    transform:
+      jsonPath: "$.data.viewer.homes[0].currentSubscription.priceInfo.current.total"
+      outputFormat: "%.4f"
+    publish: "awtrix_b77810/custom/tibber price"
+    icon: "tibber"
+    color-script: |
+      function get_color(v) {
+        if (v < 0.20) {
+          return "#32a852"; // green
+        } else if (v < 0.30) {
+          return "#FFFFFF"; // white
+        } else if (v < 0.40) {
+          return "#FFFF00"; // yellow
+        } else if (v < 0.50) {
+          return "#FF0000"; // red
+        } else {
+          return "#FFC0CB"; // pink
+        }
+      }
 
 ```
 

@@ -36,6 +36,28 @@ func NewDispatcherMqtt(config *types.Config, mqttClient MqttClient, log func(str
 		d.state[topicAcc.Group] = make(map[string]float64)
 	}
 
+	// Check ColorScript in each types.HttpConfig an set callback
+	for cfg_i, cfg := range config.Topics {
+		if cfg.ColorScript != "" {
+			colorCallback, err := createColorCallback(cfg.ColorScript)
+			if err != nil {
+				log(fmt.Sprintf("Error creating color callback for config %d: %v", cfg_i, err))
+			}
+			config.Topics[cfg_i].ColorScriptCallback = colorCallback
+		}
+	}
+
+	// Check ColorScript in each types.HttpConfig an set callback
+	for cfg_i, cfg := range config.TopicsAccumulated {
+		if cfg.ColorScript != "" {
+			colorCallback, err := createColorCallback(cfg.ColorScript)
+			if err != nil {
+				log(fmt.Sprintf("Error creating color callback for config %d: %v", cfg_i, err))
+			}
+			config.TopicsAccumulated[cfg_i].ColorScriptCallback = colorCallback
+		}
+	}
+
 	return d, nil
 }
 
@@ -51,7 +73,7 @@ func (d *Dispatcher) handleMessage(topic types.TopicConfig) func([]byte) {
 		if has, lt := topic.GetIgnoreLessThanConfig(); has && val < lt {
 			jsonData = []byte{}
 		} else {
-			jsonData = creatingFormattedPublishMessage(val, topic.Transform.OutputFormat, topic.Icon, d.log)
+			jsonData = creatingFormattedPublishMessage(val, topic.Transform.OutputFormat, topic.Icon, topic.ColorScriptCallback, d.log)
 		}
 
 		_ = d.mqttClient.Publish(topic.Publish, jsonData)
@@ -73,7 +95,7 @@ func (d *Dispatcher) handleAccMessage(topicsAccumulated types.TopicsAccumulatedC
 		if has, lt := topicsAccumulated.GetIgnoreLessThanConfig(); has && val < lt {
 			jsonData = []byte{}
 		} else {
-			jsonData = creatingFormattedPublishMessage(val, topicsAccumulated.OutputFormat, topicsAccumulated.Icon, d.log)
+			jsonData = creatingFormattedPublishMessage(val, topicsAccumulated.OutputFormat, topicsAccumulated.Icon, topicsAccumulated.ColorScriptCallback, d.log)
 		}
 
 		_ = d.mqttClient.Publish(topicsAccumulated.Publish, jsonData)
@@ -95,7 +117,7 @@ func (d *Dispatcher) accumulatFromStorage(op, group string) float64 {
 	return res
 }
 
-func creatingFormattedPublishMessage(num float64, format string, icon string, log func(string)) []byte {
+func creatingFormattedPublishMessage(num float64, format string, icon string, color func(value float64) (string, error), log func(string)) []byte {
 	// Format
 	formattedResult := fmt.Sprintf(format, num)
 
@@ -105,6 +127,15 @@ func creatingFormattedPublishMessage(num float64, format string, icon string, lo
 
 	if icon != "" {
 		pubMsg.Icon = icon
+	}
+
+	if color != nil {
+		c, err := color(num)
+		if err != nil {
+			log(fmt.Sprintf("Error running color script: %v", err))
+		} else {
+			pubMsg.Color = c
+		}
 	}
 
 	jsonData, err := json.Marshal(pubMsg)

@@ -56,7 +56,7 @@ func TestCreatingFormattedPublishMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("num=%v,format=%s,icon=%s", tt.num, tt.format, tt.icon), func(t *testing.T) {
-			got := creatingFormattedPublishMessage(tt.num, tt.format, tt.icon, func(s string) {})
+			got := creatingFormattedPublishMessage(tt.num, tt.format, tt.icon, nil, func(s string) {})
 			if string(got) != tt.want {
 				t.Errorf("creatingFormattedPublishMessage() = %v, want %v", string(got), tt.want)
 			}

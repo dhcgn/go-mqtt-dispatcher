@@ -31,6 +31,9 @@ type TopicConfig struct {
 	Publish   string          `yaml:"publish"`
 	Icon      string          `yaml:"icon"`
 	Ignore    *IgnoreConfig   `yaml:"ignore,omitempty"`
+	// ColorScript is ja Javascript with will run with full ECMAScript 5.1 support, signature must be 'function get_color(v)'
+	ColorScript         string `yaml:"color-script"`
+	ColorScriptCallback func(value float64) (string, error)
 }
 
 func (t TransformConfig) GetJsonPath() string {
@@ -66,6 +69,9 @@ type TopicsAccumulatedConfig struct {
 	OutputFormat string                   `yaml:"outputFormat"`
 	Ignore       *IgnoreConfig            `yaml:"ignore,omitempty"`
 	Topics       []AccumulatedTopicConfig `yaml:"topics"`
+	// ColorScript is ja Javascript with will run with full ECMAScript 5.1 support, signature must be 'function get_color(v)'
+	ColorScript         string `yaml:"color-script"`
+	ColorScriptCallback func(value float64) (string, error)
 }
 
 func (t TopicsAccumulatedConfig) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {
@@ -88,6 +94,9 @@ type HttpConfig struct {
 	Transform   TransformConfig `yaml:"transform"`
 	Publish     string          `yaml:"publish"`
 	Icon        string          `yaml:"icon"`
+	// ColorScript is ja Javascript with will run with full ECMAScript 5.1 support, signature must be 'function get_color(v)'
+	ColorScript         string `yaml:"color-script"`
+	ColorScriptCallback func(value float64) (string, error)
 }
 
 type Config struct {

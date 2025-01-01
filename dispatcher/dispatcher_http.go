@@ -30,6 +30,17 @@ func NewDispatcherHttp(config *[]types.HttpConfig, mqttClient MqttClient, log fu
 		log:        log,
 	}
 
+	// Check ColorScript in each types.HttpConfig an set callback
+	for cfg_i, cfg := range *config {
+		if cfg.ColorScript != "" {
+			colorCallback, err := createColorCallback(cfg.ColorScript)
+			if err != nil {
+				log(fmt.Sprintf("Error creating color callback for config %d: %v", cfg_i, err))
+			}
+			(*d.config)[cfg_i].ColorScriptCallback = colorCallback
+		}
+	}
+
 	return d, nil
 }
 
@@ -110,9 +121,20 @@ func (d *DispatcherHttp) tick(cfg types.HttpConfig) {
 		output = fmt.Sprintf("%v", val)
 	}
 
+	colorHex := ""
+	if cfg.ColorScriptCallback != nil {
+		c, err := cfg.ColorScriptCallback(val)
+		if err != nil {
+			d.log(fmt.Sprintf("Error running color script: %v", err))
+		} else {
+			colorHex = c
+		}
+	}
+
 	pubMsg := publishMessage{
-		Text: output,
-		Icon: cfg.Icon,
+		Text:  output,
+		Icon:  cfg.Icon,
+		Color: colorHex,
 	}
 	jsonData, err := json.Marshal(pubMsg)
 	if err != nil {
