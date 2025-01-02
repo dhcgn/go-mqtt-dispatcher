@@ -8,8 +8,14 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+var (
+	osReadFile = func(path string) ([]byte, error) {
+		return os.ReadFile(path)
+	}
+)
+
 func LoadConfig(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := osReadFile(path)
 	if err != nil {
 		return nil, err
 	}
