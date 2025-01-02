@@ -23,7 +23,8 @@ var (
 )
 
 var (
-	confgFlag = flag.String("config", "", "config file path, e.g. config.yaml")
+	configPathFlag = flag.String("config", "", "config file path, e.g. config.yaml")
+	configCheck    = flag.Bool("config-check", false, "check config file and exit")
 )
 
 func main() {
@@ -32,15 +33,20 @@ func main() {
 	fmt.Println()
 
 	flag.Parse()
-	if *confgFlag == "" {
+	if *configPathFlag == "" {
 		flag.PrintDefaults()
 		return
 	}
 
 	// Load config
-	config, err := config.LoadConfig(*confgFlag)
+	config, err := config.LoadConfig(*configPathFlag)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	if *configCheck {
+		log.Println("Config check successful")
+		return
 	}
 
 	// Create MQTT client
