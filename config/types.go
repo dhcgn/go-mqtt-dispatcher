@@ -4,6 +4,11 @@ package config
 
 import "net/url"
 
+type RootConfig struct {
+	Mqtt              MqttConfig `yaml:"mqtt"`
+	DispatcherEntries []Entry    `yaml:"dispatcher-entries"`
+}
+
 type MqttConfig struct {
 	Broker   string `yaml:"broker"`
 	Username string `yaml:"username"`
@@ -11,6 +16,24 @@ type MqttConfig struct {
 
 	// Late binding
 	BrokerAsUri *url.URL
+}
+
+type Entry struct {
+	Name            string                `yaml:"name"`
+	TopicsToPublish []MqttTopicDefinition `yaml:"topics-to-publish,omitempty"`
+	Icon            string                `yaml:"icon,omitempty"`
+	ColorScript     string                `yaml:"color-script,omitempty"`
+	Operation       string                `yaml:"operation,omitempty"`
+	Source          EntrySource           `yaml:"source,omitempty"`
+
+	// Late binding
+	ColorScriptCallback func(float64) (string, error)
+}
+
+type MqttTopicDefinition struct {
+	Topic     string              `yaml:"topic"`
+	Transform TransformDefinition `yaml:"transform"`
+	Filter    *FilterDefinition   `yaml:"filter,omitempty"`
 }
 
 type TransformDefinition struct {
@@ -23,10 +46,23 @@ type FilterDefinition struct {
 	IgnoreLessThan *float64 `yaml:"ignore-less-than,omitempty"`
 }
 
-type MqttTopicDefinition struct {
-	Topic     string              `yaml:"topic"`
+type EntrySource struct {
+	MqttSource *MqttSource `yaml:"mqtt,omitempty"`
+	HttpSource *HttpSource `yaml:"http,omitempty"`
+}
+
+type MqttSource struct {
+	TopicsToSubscribe []MqttTopicDefinition `yaml:"topics-to-subscribe,omitempty"`
+}
+
+type HttpSource struct {
+	Urls        []HttpUrlDefinition `yaml:"urls"`
+	IntervalSec int                 `yaml:"interval_sec"`
+}
+
+type HttpUrlDefinition struct {
+	Url       string              `yaml:"url"`
 	Transform TransformDefinition `yaml:"transform"`
-	Filter    *FilterDefinition   `yaml:"filter,omitempty"`
 }
 
 type TransformTarget interface {
@@ -75,23 +111,11 @@ func (h HttpUrlDefinition) GetInvert() bool {
 	return h.Transform.Invert
 }
 
-type Entry struct {
-	Name            string                `yaml:"name"`
-	TopicsToPublish []MqttTopicDefinition `yaml:"topics-to-publish,omitempty"`
-	Icon            string                `yaml:"icon,omitempty"`
-	ColorScript     string                `yaml:"color-script,omitempty"`
-	Operation       string                `yaml:"operation,omitempty"`
-	Source          EntrySource           `yaml:"source,omitempty"`
-
-	// Late binding
-	ColorScriptCallback func(float64) (string, error)
-}
-
 type operator string
 
 const (
-	None operator = ""
-	Sum  operator = "sum"
+	OperatorNone operator = ""
+	OperatorSum  operator = "sum"
 )
 
 func (e Entry) MustAccumulate() (bool, operator) {
@@ -105,31 +129,7 @@ func (e Entry) MustAccumulate() (bool, operator) {
 			return true, operator(e.Operation)
 		}
 	}
-	return false, None
-}
-
-type EntrySource struct {
-	MqttSource *MqttSource `yaml:"mqtt,omitempty"`
-	HttpSource *HttpSource `yaml:"http,omitempty"`
-}
-
-type MqttSource struct {
-	TopicsToSubscribe []MqttTopicDefinition `yaml:"topics-to-subscribe,omitempty"`
-}
-
-type HttpSource struct {
-	Urls        []HttpUrlDefinition `yaml:"urls"`
-	IntervalSec int                 `yaml:"interval_sec"`
-}
-
-type HttpUrlDefinition struct {
-	Url       string              `yaml:"url"`
-	Transform TransformDefinition `yaml:"transform"`
-}
-
-type Config struct {
-	Mqtt              MqttConfig `yaml:"mqtt"`
-	DispatcherEntries []Entry    `yaml:"dispatcher-entries"`
+	return false, OperatorNone
 }
 
 func (t MqttTopicDefinition) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {

@@ -14,12 +14,12 @@ var (
 	}
 )
 
-func LoadConfig(path string) (*Config, error) {
+func LoadConfig(path string) (*RootConfig, error) {
 	data, err := osReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var cfg Config
+	var cfg RootConfig
 	if err := yaml.UnmarshalStrict(data, &cfg); err != nil {
 		return nil, err
 	}
@@ -28,6 +28,12 @@ func LoadConfig(path string) (*Config, error) {
 	cfg.Mqtt.BrokerAsUri, err = url.Parse(cfg.Mqtt.Broker)
 	if err != nil {
 		return nil, err
+	}
+
+	for e_i, e := range cfg.DispatcherEntries {
+		if e.Operation != string(OperatorNone) && e.Operation != string(OperatorSum) {
+			return nil, fmt.Errorf("ERROR: INVALID OPERATION %d: %s", e_i, e.Operation)
+		}
 	}
 
 	// TODO Move to config validation

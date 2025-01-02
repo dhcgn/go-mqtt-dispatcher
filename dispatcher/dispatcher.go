@@ -71,11 +71,18 @@ func (d *Dispatcher) runHttp(entry config.Entry) {
 			tickFunc(u, e) // First tick
 			for range ticker.C {
 				tickFunc(u, e)
+				if interruptRunHttpTickerAfterTick {
+					return
+				}
 			}
 
 		}(entry, urlDef.Url)
 	}
 }
+
+var (
+	interruptRunHttpTickerAfterTick = false
+)
 
 // runMqtt creates a trigger for the mqtt source and attaches the callback
 func (d *Dispatcher) runMqtt(entry config.Entry) {
@@ -134,7 +141,7 @@ func (d *Dispatcher) callback(payload []byte, entry config.Entry, id string, tra
 		}
 		d.state[entry.Name][id] = val
 
-		if op == config.Sum {
+		if op == config.OperatorSum {
 			sum := 0.0
 			for _, v := range d.state[entry.Name] {
 				sum += v
