@@ -32,11 +32,10 @@ func LoadConfig(path string) (*RootConfig, error) {
 
 	for e_i, e := range cfg.DispatcherEntries {
 		if e.Operation != string(OperatorNone) && e.Operation != string(OperatorSum) {
-			return nil, fmt.Errorf("ERROR: INVALID OPERATION %d: %s", e_i, e.Operation)
+			return nil, fmt.Errorf("ERROR: INVALID OPERATION INDEX %d: '%s'", e_i, e.Operation)
 		}
 	}
 
-	// TODO Move to config validation
 	for e_i, e := range cfg.DispatcherEntries {
 		if e.ColorScript != "" {
 			colorCallback, err := createColorCallback(e.ColorScript)
