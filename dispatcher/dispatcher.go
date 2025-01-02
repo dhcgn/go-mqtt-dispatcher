@@ -1,4 +1,3 @@
-// TODO: Update comments of funcs
 package dispatcher
 
 import (
@@ -8,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/oliveagle/jsonpath"
 )
@@ -33,11 +34,7 @@ func NewDispatcher(entries *[]config.Entry, mqttClient MqttClient, log func(s st
 	}, nil
 }
 
-// Run starts the dispatcher
-//
-// 1. Iterate over all entries
-// 2. Create a event listener for each type of MqttSource or HttpSource
-// 3. Create a callback function for each event listener
+// Run starts the dispatcher and creates triggers for the sources and attaches the callbacks
 func (d *Dispatcher) Run() {
 	for _, entry := range *d.entries {
 		if entry.Source.MqttSource != nil {
@@ -50,6 +47,7 @@ func (d *Dispatcher) Run() {
 	}
 }
 
+// runHttp creates a trigger for the http source and attaches the callback
 func (d *Dispatcher) runHttp(entry config.Entry) {
 	for _, urlDef := range entry.Source.HttpSource.Urls {
 		go func(e config.Entry, u string) {
@@ -64,7 +62,7 @@ func (d *Dispatcher) runHttp(entry config.Entry) {
 					return
 				}
 				for _, topicPub := range entry.TopicsToPublish {
-					d.callback(payload, entry, url, urlDef, topicPub, topicPub, func(msg []byte) {
+					d.callback(payload, entry, url, urlDef, topicPub, func(msg []byte) {
 						d.mqttClient.Publish(topicPub.Topic, msg)
 					})
 				}
@@ -79,13 +77,14 @@ func (d *Dispatcher) runHttp(entry config.Entry) {
 	}
 }
 
+// runMqtt creates a trigger for the mqtt source and attaches the callback
 func (d *Dispatcher) runMqtt(entry config.Entry) {
 	for _, topicSub := range entry.Source.MqttSource.TopicsToSubscribe {
 		d.log("- Subscribing to " + topicSub.Topic)
 		err := d.mqttClient.Subscribe(topicSub.Topic, func(payload []byte) {
 			d.log("Received payload for " + topicSub.Topic)
 			for _, topicPub := range entry.TopicsToPublish {
-				d.callback(payload, entry, topicSub.Topic, topicSub, topicPub, topicPub, func(msg []byte) {
+				d.callback(payload, entry, topicSub.Topic, topicSub, topicPub, func(msg []byte) {
 					d.mqttClient.Publish(topicPub.Topic, msg)
 				})
 			}
@@ -107,6 +106,11 @@ func getHttpPayload(url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP status code: %d", resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
@@ -116,28 +120,20 @@ func getHttpPayload(url string) ([]byte, error) {
 }
 
 // callback is called when a new event is received
-//
-// 1. Tranform the payload to a float64, use types.TransformDefinition
-// 2. If Accumulated, store the state in the dispatcher, and calculate the new value (use 'func (e Entry) MustAccumulate()')
-// 3. Create a formatted message with OutputFormat
-// 4. Create a message for TopicsToPublish with the formatted message and optional icon and color
-func (d *Dispatcher) callback(payload []byte, entry config.Entry, id string, t config.Transform, o config.OuputFormat, f config.Filter, publish func([]byte)) {
-	// 1) Transform payload
-	val, err := d.transformPayload(payload, t)
+func (d *Dispatcher) callback(payload []byte, entry config.Entry, id string, trans config.Transformers, f config.Filter, publish func([]byte)) {
+	val, err := d.transformPayload(payload, trans)
 	if err != nil {
 		d.log("transform error: " + err.Error())
 		return
 	}
 
-	// 2) Check if accumulation is needed
+	// Accumulate
 	if must, op := entry.MustAccumulate(); must {
-		// Store to state
 		if _, ok := d.state[entry.Name]; !ok {
 			d.state[entry.Name] = make(map[string]float64)
 		}
 		d.state[entry.Name][id] = val
 
-		// Calculate new value
 		if op == config.Sum {
 			sum := 0.0
 			for _, v := range d.state[entry.Name] {
@@ -145,10 +141,12 @@ func (d *Dispatcher) callback(payload []byte, entry config.Entry, id string, t c
 			}
 			val = sum
 			d.log(fmt.Sprintf("Accumulated value for %s: %f, from %v values ", entry.Name, val, len(d.state[entry.Name])))
+		} else {
+			d.log(fmt.Sprintf("Operation '%s' not supported", op))
 		}
 	}
 
-	// Check for Filter
+	// Filter
 	if f.GetFilter() != nil {
 		if f.GetFilter().IgnoreLessThan != nil {
 			if val < *f.GetFilter().IgnoreLessThan {
@@ -159,21 +157,20 @@ func (d *Dispatcher) callback(payload []byte, entry config.Entry, id string, t c
 		}
 	}
 
-	// 3) Format payload with optional color/icon
 	pubMsg := publishMessage{}
 
 	// Output Format
-	formatted := outputFormat(val, o)
+	formatted := outputFormat(val, trans)
 	pubMsg.Text = formatted
 
-	// Color
+	// Add Color
 	if entry.ColorScriptCallback != nil {
 		if c, err := entry.ColorScriptCallback(val); err == nil {
 			pubMsg.Color = c
 		}
 	}
 
-	// Icon
+	// Add Icon
 	if entry.Icon != "" {
 		pubMsg.Icon = entry.Icon
 	}
@@ -187,20 +184,23 @@ func (d *Dispatcher) callback(payload []byte, entry config.Entry, id string, t c
 	publish(jsonData)
 }
 
-func outputFormat(val float64, o config.OuputFormat) string {
+func outputFormat(val float64, o config.TransformTarget) string {
 	if o.GetOutputFormat() != "" {
 		return fmt.Sprintf(o.GetOutputFormat(), val)
 	}
 	return fmt.Sprintf("%v", val)
 }
 
-func (d *Dispatcher) transformPayload(payload []byte, t config.Transform) (float64, error) {
+func (d *Dispatcher) transformPayload(payload []byte, t config.TransformSource) (float64, error) {
 	jsonPath := t.GetJsonPath()
 	result := 0.0
 
 	var err error
 	if jsonPath == "" {
-		result, err = strconv.ParseFloat(fmt.Sprintf("%v", string(payload)), 64)
+		trimmed := strings.TrimFunc(string(payload), func(r rune) bool {
+			return !unicode.IsPrint(r)
+		})
+		result, err = strconv.ParseFloat(trimmed, 64)
 		if err != nil {
 			return 0, err
 		}

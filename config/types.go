@@ -29,7 +29,7 @@ type MqttTopicDefinition struct {
 	Filter    *FilterDefinition   `yaml:"filter,omitempty"`
 }
 
-type OuputFormat interface {
+type TransformTarget interface {
 	GetOutputFormat() string
 }
 
@@ -49,9 +49,14 @@ func (m MqttTopicDefinition) GetFilter() *FilterDefinition {
 	return m.Filter
 }
 
-type Transform interface {
+type TransformSource interface {
 	GetJsonPath() string
 	GetInvert() bool
+}
+
+type Transformers interface {
+	TransformSource
+	TransformTarget
 }
 
 func (m MqttTopicDefinition) GetJsonPath() string {
