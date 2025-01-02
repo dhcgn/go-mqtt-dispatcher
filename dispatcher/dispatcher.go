@@ -55,7 +55,7 @@ func (d *Dispatcher) runHttp(entry config.Entry) {
 		go func(e config.Entry, u string) {
 			ticker := time.NewTicker(time.Duration(entry.Source.HttpSource.IntervalSec) * time.Second)
 			defer ticker.Stop()
-			d.log("- Polling " + u + " with interval: " + time.Duration(entry.Source.HttpSource.IntervalSec).String())
+			d.log("- Polling " + u + " with interval: " + time.Duration(entry.Source.HttpSource.IntervalSec*int(time.Second)).String())
 
 			tickFunc := func(url string, entry config.Entry) {
 				payload, err := getHttpPayload(url)
