@@ -35,7 +35,7 @@ func LoadConfig(path string) (*Config, error) {
 		if e.ColorScript != "" {
 			colorCallback, err := createColorCallback(e.ColorScript)
 			if err != nil {
-				return nil, fmt.Errorf("Error creating color callback for config %d: %v", e_i, err)
+				return nil, fmt.Errorf("ERROR CREATING COLOR CALLBACK FOR CONFIG %d: %v", e_i, err)
 			}
 			cfg.DispatcherEntries[e_i].ColorScriptCallback = colorCallback
 		}
