@@ -62,7 +62,8 @@ func (d *Dispatcher) runHttp(entry config.Entry) {
 					return
 				}
 				for _, topicPub := range entry.TopicsToPublish {
-					d.callback(payload, entry, url, urlDef, topicPub, func(msg []byte) {
+					c := callbackConfig{Entry: entry, Id: url, Trans: urlDef, Filter: topicPub}
+					d.callback(payload, c, func(msg []byte) {
 						d.mqttClient.Publish(topicPub.Topic, msg)
 					})
 				}
@@ -91,7 +92,8 @@ func (d *Dispatcher) runMqtt(entry config.Entry) {
 		err := d.mqttClient.Subscribe(topicSub.Topic, func(payload []byte) {
 			d.log("Received payload for " + topicSub.Topic)
 			for _, topicPub := range entry.TopicsToPublish {
-				d.callback(payload, entry, topicSub.Topic, topicSub, topicPub, func(msg []byte) {
+				c := callbackConfig{Entry: entry, Id: topicSub.Topic, Trans: topicSub, Filter: topicPub}
+				d.callback(payload, c, func(msg []byte) {
 					d.mqttClient.Publish(topicPub.Topic, msg)
 				})
 			}
@@ -126,37 +128,44 @@ func getHttpPayload(url string) ([]byte, error) {
 	return body, nil
 }
 
+type callbackConfig struct {
+	Entry  config.Entry
+	Id     string
+	Trans  config.Transformers
+	Filter config.Filter
+}
+
 // callback is called when a new event is received
-func (d *Dispatcher) callback(payload []byte, entry config.Entry, id string, trans config.Transformers, f config.Filter, publish func([]byte)) {
-	val, err := d.transformPayload(payload, trans)
+func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]byte)) {
+	val, err := d.transformPayload(payload, c.Trans)
 	if err != nil {
 		d.log("transform error: " + err.Error())
 		return
 	}
 
 	// Accumulate
-	if must, op := entry.MustAccumulate(); must {
-		if _, ok := d.state[entry.Name]; !ok {
-			d.state[entry.Name] = make(map[string]float64)
+	if must, op := c.Entry.MustAccumulate(); must {
+		if _, ok := d.state[c.Entry.Name]; !ok {
+			d.state[c.Entry.Name] = make(map[string]float64)
 		}
-		d.state[entry.Name][id] = val
+		d.state[c.Entry.Name][c.Id] = val
 
 		if op == config.OperatorSum {
 			sum := 0.0
-			for _, v := range d.state[entry.Name] {
+			for _, v := range d.state[c.Entry.Name] {
 				sum += v
 			}
 			val = sum
-			d.log(fmt.Sprintf("Accumulated value for %s: %f, from %v values ", entry.Name, val, len(d.state[entry.Name])))
+			d.log(fmt.Sprintf("Accumulated value for %s: %f, from %v values ", c.Entry.Name, val, len(d.state[c.Entry.Name])))
 		} else {
 			d.log(fmt.Sprintf("Operation '%s' not supported", op))
 		}
 	}
 
 	// Filter
-	if f.GetFilter() != nil {
-		if f.GetFilter().IgnoreLessThan != nil {
-			if val < *f.GetFilter().IgnoreLessThan {
+	if c.Filter.GetFilter() != nil {
+		if c.Filter.GetFilter().IgnoreLessThan != nil {
+			if val < *c.Filter.GetFilter().IgnoreLessThan {
 				// Empty payload deletes the "custom app" on the client
 				publish([]byte{})
 				return
@@ -167,19 +176,19 @@ func (d *Dispatcher) callback(payload []byte, entry config.Entry, id string, tra
 	pubMsg := publishMessage{}
 
 	// Output Format
-	formatted := outputFormat(val, trans)
+	formatted := outputFormat(val, c.Trans)
 	pubMsg.Text = formatted
 
 	// Add Color
-	if entry.ColorScriptCallback != nil {
-		if c, err := entry.ColorScriptCallback(val); err == nil {
+	if c.Entry.ColorScriptCallback != nil {
+		if c, err := c.Entry.ColorScriptCallback(val); err == nil {
 			pubMsg.Color = c
 		}
 	}
 
 	// Add Icon
-	if entry.Icon != "" {
-		pubMsg.Icon = entry.Icon
+	if c.Entry.Icon != "" {
+		pubMsg.Icon = c.Entry.Icon
 	}
 
 	jsonData, err := json.Marshal(pubMsg)
