@@ -1,6 +1,6 @@
 // TODO: Evalaute all interfaces
 // TODO: Update docs for new config!
-package types
+package config
 
 import "net/url"
 

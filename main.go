@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"go-mqtt-dispatcher/config"
 	"go-mqtt-dispatcher/dispatcher"
-	"go-mqtt-dispatcher/types"
 	"log"
 	"net/url"
 	"time"
@@ -38,7 +38,7 @@ func main() {
 	}
 
 	// Load config
-	config, err := types.LoadConfig(*confgFlag)
+	config, err := config.LoadConfig(*confgFlag)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}

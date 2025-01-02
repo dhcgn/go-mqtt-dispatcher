@@ -4,7 +4,7 @@ package dispatcher
 import (
 	"encoding/json"
 	"fmt"
-	"go-mqtt-dispatcher/types"
+	"go-mqtt-dispatcher/config"
 	"io"
 	"net/http"
 	"strconv"
@@ -14,13 +14,13 @@ import (
 )
 
 type Dispatcher struct {
-	entries    *[]types.Entry
+	entries    *[]config.Entry
 	state      map[string]map[string]float64
 	mqttClient MqttClient
 	log        func(string)
 }
 
-func NewDispatcher(entries *[]types.Entry, mqttClient MqttClient, log func(s string)) (*Dispatcher, error) {
+func NewDispatcher(entries *[]config.Entry, mqttClient MqttClient, log func(s string)) (*Dispatcher, error) {
 	if log == nil {
 		log = func(s string) {}
 	}
@@ -50,14 +50,14 @@ func (d *Dispatcher) Run() {
 	}
 }
 
-func (d *Dispatcher) runHttp(entry types.Entry) {
+func (d *Dispatcher) runHttp(entry config.Entry) {
 	for _, urlDef := range entry.Source.HttpSource.Urls {
-		go func(e types.Entry, u string) {
+		go func(e config.Entry, u string) {
 			ticker := time.NewTicker(time.Duration(entry.Source.HttpSource.IntervalSec) * time.Second)
 			defer ticker.Stop()
 			d.log("- Polling " + u + " with interval: " + time.Duration(entry.Source.HttpSource.IntervalSec).String())
 
-			tickFunc := func(url string, entry types.Entry) {
+			tickFunc := func(url string, entry config.Entry) {
 				payload, err := getHttpPayload(url)
 				if err != nil {
 					d.log("Error getting HTTP payload: " + err.Error())
@@ -79,7 +79,7 @@ func (d *Dispatcher) runHttp(entry types.Entry) {
 	}
 }
 
-func (d *Dispatcher) runMqtt(entry types.Entry) {
+func (d *Dispatcher) runMqtt(entry config.Entry) {
 	for _, topicSub := range entry.Source.MqttSource.TopicsToSubscribe {
 		d.log("- Subscribing to " + topicSub.Topic)
 		err := d.mqttClient.Subscribe(topicSub.Topic, func(payload []byte) {
@@ -121,7 +121,7 @@ func getHttpPayload(url string) ([]byte, error) {
 // 2. If Accumulated, store the state in the dispatcher, and calculate the new value (use 'func (e Entry) MustAccumulate()')
 // 3. Create a formatted message with OutputFormat
 // 4. Create a message for TopicsToPublish with the formatted message and optional icon and color
-func (d *Dispatcher) callback(payload []byte, entry types.Entry, id string, t types.Transform, o types.OuputFormat, f types.Filter, publish func([]byte)) {
+func (d *Dispatcher) callback(payload []byte, entry config.Entry, id string, t config.Transform, o config.OuputFormat, f config.Filter, publish func([]byte)) {
 	// 1) Transform payload
 	val, err := d.transformPayload(payload, t)
 	if err != nil {
@@ -138,7 +138,7 @@ func (d *Dispatcher) callback(payload []byte, entry types.Entry, id string, t ty
 		d.state[entry.Name][id] = val
 
 		// Calculate new value
-		if op == types.Sum {
+		if op == config.Sum {
 			sum := 0.0
 			for _, v := range d.state[entry.Name] {
 				sum += v
@@ -187,14 +187,14 @@ func (d *Dispatcher) callback(payload []byte, entry types.Entry, id string, t ty
 	publish(jsonData)
 }
 
-func outputFormat(val float64, o types.OuputFormat) string {
+func outputFormat(val float64, o config.OuputFormat) string {
 	if o.GetOutputFormat() != "" {
 		return fmt.Sprintf(o.GetOutputFormat(), val)
 	}
 	return fmt.Sprintf("%v", val)
 }
 
-func (d *Dispatcher) transformPayload(payload []byte, t types.Transform) (float64, error) {
+func (d *Dispatcher) transformPayload(payload []byte, t config.Transform) (float64, error) {
 	jsonPath := t.GetJsonPath()
 	result := 0.0
 
