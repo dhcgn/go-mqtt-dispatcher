@@ -14,9 +14,10 @@ import (
 	"github.com/oliveagle/jsonpath"
 )
 
+type dispatcherState map[string]map[string]float64
 type Dispatcher struct {
 	entries    *[]config.Entry
-	state      map[string]map[string]float64
+	state      dispatcherState
 	mqttClient MqttClient
 	log        func(string)
 }
@@ -28,7 +29,7 @@ func NewDispatcher(entries *[]config.Entry, mqttClient MqttClient, log func(s st
 
 	return &Dispatcher{
 		entries:    entries,
-		state:      make(map[string]map[string]float64),
+		state:      make(dispatcherState),
 		mqttClient: mqttClient,
 		log:        log,
 	}, nil
@@ -47,11 +48,17 @@ func (d *Dispatcher) Run() {
 	}
 }
 
+var (
+	getTicker = func(d time.Duration) *time.Ticker {
+		return time.NewTicker(d)
+	}
+)
+
 // runHttp creates a trigger for the http source and attaches the callback
 func (d *Dispatcher) runHttp(entry config.Entry) {
 	for _, urlDef := range entry.Source.HttpSource.Urls {
 		go func(e config.Entry, u string) {
-			ticker := time.NewTicker(time.Duration(entry.Source.HttpSource.IntervalSec) * time.Second)
+			ticker := getTicker(time.Duration(entry.Source.HttpSource.IntervalSec) * time.Second)
 			defer ticker.Stop()
 			d.log("- Polling " + u + " with interval: " + time.Duration(entry.Source.HttpSource.IntervalSec*int(time.Second)).String())
 
