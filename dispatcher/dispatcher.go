@@ -25,17 +25,6 @@ func NewDispatcher(entries *[]types.Entry, mqttClient MqttClient, log func(s str
 		log = func(s string) {}
 	}
 
-	// TODO Move to config validation
-	for e_i, e := range *entries {
-		if e.ColorScript != "" {
-			colorCallback, err := createColorCallback(e.ColorScript)
-			if err != nil {
-				log(fmt.Sprintf("Error creating color callback for config %d: %v", e_i, err))
-			}
-			(*entries)[e_i].ColorScriptCallback = colorCallback
-		}
-	}
-
 	return &Dispatcher{
 		entries:    entries,
 		state:      make(map[string]map[string]float64),
@@ -53,54 +42,68 @@ func (d *Dispatcher) Run() {
 	for _, entry := range *d.entries {
 		if entry.Source.MqttSource != nil {
 			d.log("Entry for mqtt: " + entry.Name)
-			for _, topicSub := range entry.Source.MqttSource.TopicsToSubscribe {
-				d.log("- Subscribing to " + topicSub.Topic)
-				err := d.mqttClient.Subscribe(topicSub.Topic, func(payload []byte) {
-					d.log("Received payload for " + topicSub.Topic)
-					for _, topicPub := range entry.TopicsToPublish {
-						d.callback(payload, entry, topicSub.Topic, topicSub, topicPub, topicPub, func(msg []byte) {
-							d.mqttClient.Publish(topicPub.Topic, msg)
-						})
-					}
-				})
-				if err != nil {
-					d.log("Error subscribing to topic: " + err.Error())
-				}
-			}
+			d.runMqtt(entry)
 		} else if entry.Source.HttpSource != nil {
 			d.log("Entry for http: " + entry.Name)
-			for _, urlDef := range entry.Source.HttpSource.Urls {
-				go func(e types.Entry, u string) {
-					ticker := time.NewTicker(time.Duration(entry.Source.HttpSource.IntervalSec) * time.Second)
-					defer ticker.Stop()
-					d.log("- Polling " + u + " with interval: " + time.Duration(entry.Source.HttpSource.IntervalSec).String())
-
-					tickFunc := func(url string, entry types.Entry) {
-						payload, err := getHttpPayload(url)
-						if err != nil {
-							d.log("Error getting HTTP payload: " + err.Error())
-							return
-						}
-						for _, topicPub := range entry.TopicsToPublish {
-							d.callback(payload, entry, url, urlDef, topicPub, topicPub, func(msg []byte) {
-								d.mqttClient.Publish(topicPub.Topic, msg)
-							})
-						}
-					}
-
-					tickFunc(u, e) // First tick
-					for range ticker.C {
-						tickFunc(u, e)
-					}
-
-				}(entry, urlDef.Url)
-			}
+			d.runHttp(entry)
 		}
 	}
 }
 
+func (d *Dispatcher) runHttp(entry types.Entry) {
+	for _, urlDef := range entry.Source.HttpSource.Urls {
+		go func(e types.Entry, u string) {
+			ticker := time.NewTicker(time.Duration(entry.Source.HttpSource.IntervalSec) * time.Second)
+			defer ticker.Stop()
+			d.log("- Polling " + u + " with interval: " + time.Duration(entry.Source.HttpSource.IntervalSec).String())
+
+			tickFunc := func(url string, entry types.Entry) {
+				payload, err := getHttpPayload(url)
+				if err != nil {
+					d.log("Error getting HTTP payload: " + err.Error())
+					return
+				}
+				for _, topicPub := range entry.TopicsToPublish {
+					d.callback(payload, entry, url, urlDef, topicPub, topicPub, func(msg []byte) {
+						d.mqttClient.Publish(topicPub.Topic, msg)
+					})
+				}
+			}
+
+			tickFunc(u, e) // First tick
+			for range ticker.C {
+				tickFunc(u, e)
+			}
+
+		}(entry, urlDef.Url)
+	}
+}
+
+func (d *Dispatcher) runMqtt(entry types.Entry) {
+	for _, topicSub := range entry.Source.MqttSource.TopicsToSubscribe {
+		d.log("- Subscribing to " + topicSub.Topic)
+		err := d.mqttClient.Subscribe(topicSub.Topic, func(payload []byte) {
+			d.log("Received payload for " + topicSub.Topic)
+			for _, topicPub := range entry.TopicsToPublish {
+				d.callback(payload, entry, topicSub.Topic, topicSub, topicPub, topicPub, func(msg []byte) {
+					d.mqttClient.Publish(topicPub.Topic, msg)
+				})
+			}
+		})
+		if err != nil {
+			d.log("Error subscribing to topic: " + err.Error())
+		}
+	}
+}
+
+var (
+	httpGet = func(url string) (resp *http.Response, err error) {
+		return http.Get(url)
+	}
+)
+
 func getHttpPayload(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+	resp, err := httpGet(url)
 	if err != nil {
 		return nil, err
 	}
