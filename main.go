@@ -46,29 +46,39 @@ func main() {
 	}
 
 	// Create MQTT client
-	client := connect(AppName, config.Mqtt.BrokerAsUri)
+	client := connect(AppName+Version+Commit+BuildTime, config.Mqtt.BrokerAsUri)
 	mqttClient := dispatcher.NewPahoMqttClient(client)
 
-	// Create dispatcher with MQTT client
-	dispatchermqtt, err := dispatcher.NewDispatcherMqtt(config, mqttClient, func(s string) {
-		log.Println("Disp.MQTT: " + s)
-	})
+	// NEW START
+
+	d, err := dispatcher.NewDispatcher(&config.DispatcherEntries, mqttClient, func(s string) { log.Println("Disp: " + s) })
 	if err != nil {
 		log.Fatalf("Failed to create dispatcher: %v", err)
 	}
+	d.Run()
 
-	defer log.Println("Done")
-	go dispatchermqtt.Run(AppName, Version, Commit, BuildTime)
-	log.Println("mqtt dispatcher started")
+	// NEW ENC
 
-	dispatcherhttp, err := dispatcher.NewDispatcherHttp(&config.Http, mqttClient, func(s string) {
-		log.Println("Disp.HTTP: " + s)
-	})
-	if err != nil {
-		log.Fatalf("Failed to create http dispatcher: %v", err)
-	}
-	go dispatcherhttp.Run()
-	log.Println("http dispatcher started")
+	// // Create dispatcher with MQTT client
+	// dispatchermqtt, err := dispatcher.NewDispatcherMqtt(&config.DispatcherConfig.Mqtt, mqttClient, func(s string) {
+	// 	log.Println("Disp.MQTT: " + s)
+	// })
+	// if err != nil {
+	// 	log.Fatalf("Failed to create dispatcher: %v", err)
+	// }
+
+	// defer log.Println("Done")
+	// go dispatchermqtt.Run(AppName, Version, Commit, BuildTime)
+	// log.Println("mqtt dispatcher started")
+
+	// dispatcherhttp, err := dispatcher.NewDispatcherHttp(&config.DispatcherConfig.Http, mqttClient, func(s string) {
+	// 	log.Println("Disp.HTTP: " + s)
+	// })
+	// if err != nil {
+	// 	log.Fatalf("Failed to create http dispatcher: %v", err)
+	// }
+	// go dispatcherhttp.Run()
+	// log.Println("http dispatcher started")
 
 	select {}
 }

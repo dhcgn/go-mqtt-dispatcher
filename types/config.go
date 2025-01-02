@@ -1,107 +1,140 @@
+// TODO: Evalaute all interfaces
+// TODO: Update docs for new config!
 package types
 
 import "net/url"
+
+type MqttConfig struct {
+	Broker   string `yaml:"broker"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+
+	// Late binding
+	BrokerAsUri *url.URL
+}
+
+type TransformDefinition struct {
+	JsonPath     string `yaml:"jsonPath"`
+	Invert       bool   `yaml:"invert,omitempty"`
+	OutputFormat string `yaml:"outputFormat,omitempty"`
+}
+
+type FilterDefinition struct {
+	IgnoreLessThan *float64 `yaml:"ignore-less-than,omitempty"`
+}
+
+type MqttTopicDefinition struct {
+	Topic     string              `yaml:"topic"`
+	Transform TransformDefinition `yaml:"transform"`
+	Filter    *FilterDefinition   `yaml:"filter,omitempty"`
+}
+
+type OuputFormat interface {
+	GetOutputFormat() string
+}
+
+func (m MqttTopicDefinition) GetOutputFormat() string {
+	return m.Transform.OutputFormat
+}
+
+func (h HttpUrlDefinition) GetOutputFormat() string {
+	return h.Transform.OutputFormat
+}
+
+type Filter interface {
+	GetFilter() *FilterDefinition
+}
+
+func (m MqttTopicDefinition) GetFilter() *FilterDefinition {
+	return m.Filter
+}
 
 type Transform interface {
 	GetJsonPath() string
 	GetInvert() bool
 }
 
-type MqttConfig struct {
-	Broker      string `yaml:"broker"`
-	BrokerAsUri *url.URL
-	Username    string `yaml:"username"`
-	Password    string `yaml:"password"`
+func (m MqttTopicDefinition) GetJsonPath() string {
+	return m.Transform.JsonPath
 }
 
-type TransformConfig struct {
-	JsonPath string `yaml:"jsonPath"`
-	Invert   bool   `yaml:"invert,omitempty"`
-
-	OutputFormat string `yaml:"outputFormat"`
+func (m MqttTopicDefinition) GetInvert() bool {
+	return m.Transform.Invert
 }
 
-type IgnoreConfig struct {
-	LessThan *float64 `yaml:"lessThan,omitempty"`
+func (h HttpUrlDefinition) GetJsonPath() string {
+	return h.Transform.JsonPath
 }
 
-type TopicConfig struct {
-	Subscribe string          `yaml:"subscribe"`
-	Transform TransformConfig `yaml:"transform"`
-	Publish   string          `yaml:"publish"`
-	Icon      string          `yaml:"icon"`
-	Ignore    *IgnoreConfig   `yaml:"ignore,omitempty"`
-	// ColorScript is ja Javascript with will run with full ECMAScript 5.1 support, signature must be 'function get_color(v)'
-	ColorScript         string `yaml:"color-script"`
-	ColorScriptCallback func(value float64) (string, error)
+func (h HttpUrlDefinition) GetInvert() bool {
+	return h.Transform.Invert
 }
 
-func (t TransformConfig) GetJsonPath() string {
-	return t.JsonPath
-}
-func (t TransformConfig) GetInvert() bool {
-	return t.Invert
+type Entry struct {
+	Name            string                `yaml:"name"`
+	TopicsToPublish []MqttTopicDefinition `yaml:"topics-to-publish,omitempty"`
+	Icon            string                `yaml:"icon,omitempty"`
+	ColorScript     string                `yaml:"color-script,omitempty"`
+	Operation       string                `yaml:"operation,omitempty"`
+	Source          EntrySource           `yaml:"source,omitempty"`
+
+	// Late binding
+	ColorScriptCallback func(float64) (string, error)
 }
 
-type AccumulatedTopicTransform struct {
-	JsonPath string `yaml:"jsonPath"`
-	Invert   bool   `yaml:"invert,omitempty"`
-}
+type operator string
 
-func (t AccumulatedTopicTransform) GetJsonPath() string {
-	return t.JsonPath
-}
+const (
+	None operator = ""
+	Sum  operator = "sum"
+)
 
-func (t AccumulatedTopicTransform) GetInvert() bool {
-	return t.Invert
-}
-
-type AccumulatedTopicConfig struct {
-	Subscribe string                    `yaml:"subscribe"`
-	Transform AccumulatedTopicTransform `yaml:"transform"`
-}
-
-type TopicsAccumulatedConfig struct {
-	Group        string                   `yaml:"group"`
-	Publish      string                   `yaml:"publish"`
-	Icon         string                   `yaml:"icon"`
-	Operation    string                   `yaml:"operation"`
-	OutputFormat string                   `yaml:"outputFormat"`
-	Ignore       *IgnoreConfig            `yaml:"ignore,omitempty"`
-	Topics       []AccumulatedTopicConfig `yaml:"topics"`
-	// ColorScript is ja Javascript with will run with full ECMAScript 5.1 support, signature must be 'function get_color(v)'
-	ColorScript         string `yaml:"color-script"`
-	ColorScriptCallback func(value float64) (string, error)
-}
-
-func (t TopicsAccumulatedConfig) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {
-	if t.Ignore != nil && t.Ignore.LessThan != nil {
-		return true, *t.Ignore.LessThan
+func (e Entry) MustAccumulate() (bool, operator) {
+	if e.Source.HttpSource != nil {
+		if len(e.Source.HttpSource.Urls) > 1 {
+			return true, operator(e.Operation)
+		}
 	}
-	return false, 0
-}
-
-func (t TopicConfig) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {
-	if t.Ignore != nil && t.Ignore.LessThan != nil {
-		return true, *t.Ignore.LessThan
+	if e.Source.MqttSource != nil {
+		if len(e.Source.MqttSource.TopicsToSubscribe) > 1 {
+			return true, operator(e.Operation)
+		}
 	}
-	return false, 0
+	return false, None
 }
 
-type HttpConfig struct {
-	Url         string          `yaml:"url"`
-	IntervalSec int             `yaml:"interval_sec"`
-	Transform   TransformConfig `yaml:"transform"`
-	Publish     string          `yaml:"publish"`
-	Icon        string          `yaml:"icon"`
-	// ColorScript is ja Javascript with will run with full ECMAScript 5.1 support, signature must be 'function get_color(v)'
-	ColorScript         string `yaml:"color-script"`
-	ColorScriptCallback func(value float64) (string, error)
+type EntrySource struct {
+	MqttSource *MqttSource `yaml:"mqtt,omitempty"`
+	HttpSource *HttpSource `yaml:"http,omitempty"`
+}
+
+type MqttSource struct {
+	TopicsToSubscribe []MqttTopicDefinition `yaml:"topics-to-subscribe,omitempty"`
+}
+
+type HttpSource struct {
+	Urls        []HttpUrlDefinition `yaml:"urls"`
+	IntervalSec int                 `yaml:"interval_sec"`
+}
+
+type HttpUrlDefinition struct {
+	Url       string              `yaml:"url"`
+	Transform TransformDefinition `yaml:"transform"`
 }
 
 type Config struct {
-	Mqtt              MqttConfig                `yaml:"mqtt"`
-	Topics            []TopicConfig             `yaml:"topics"`
-	TopicsAccumulated []TopicsAccumulatedConfig `yaml:"topics_accumulated"`
-	Http              []HttpConfig              `yaml:"http"`
+	Mqtt              MqttConfig `yaml:"mqtt"`
+	DispatcherEntries []Entry    `yaml:"dispatcher-entries"`
+}
+
+func (t MqttTopicDefinition) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {
+	if t.Filter == nil {
+		return false, 0
+	}
+
+	if t.Filter.IgnoreLessThan == nil {
+		return false, 0
+	}
+
+	return true, *t.Filter.IgnoreLessThan
 }
