@@ -37,9 +37,10 @@ type MqttTopicDefinition struct {
 }
 
 type TransformDefinition struct {
-	JsonPath     string `yaml:"jsonPath"`
-	Invert       bool   `yaml:"invert,omitempty"`
-	OutputFormat string `yaml:"outputFormat,omitempty"`
+	JsonPath            string `yaml:"jsonPath"`
+	Invert              bool   `yaml:"invert,omitempty"`
+	OutputFormat        string `yaml:"outputFormat,omitempty"`
+	OutputAsTibberGraph bool   `yaml:"output-as-tibber-graph,omitempty"`
 }
 
 type FilterDefinition struct {
@@ -67,6 +68,7 @@ type HttpUrlDefinition struct {
 
 type TransformTarget interface {
 	GetOutputFormat() string
+	GetOutputAsTibberGraph() bool
 }
 
 func (m MqttTopicDefinition) GetOutputFormat() string {
@@ -75,6 +77,14 @@ func (m MqttTopicDefinition) GetOutputFormat() string {
 
 func (h HttpUrlDefinition) GetOutputFormat() string {
 	return h.Transform.OutputFormat
+}
+
+func (m MqttTopicDefinition) GetOutputAsTibberGraph() bool {
+	return m.Transform.OutputAsTibberGraph
+}
+
+func (h HttpUrlDefinition) GetOutputAsTibberGraph() bool {
+	return h.Transform.OutputAsTibberGraph
 }
 
 type Filter interface {
