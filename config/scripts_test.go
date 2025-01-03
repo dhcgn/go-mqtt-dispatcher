@@ -1,4 +1,4 @@
-package dispatcher
+package config
 
 import (
 	"strings"
@@ -56,35 +56,35 @@ func TestCreateColorCallbackErrors(t *testing.T) {
 		{
 			name:    "Empty script",
 			script:  "",
-			wantErr: "Empty script",
+			wantErr: errorEmptyScript,
 		},
 		{
 			name:    "Syntax error",
 			script:  `function get_colr(v) { return "#FFF";`,
-			wantErr: "Error running color script",
+			wantErr: errorRunningScript,
 		},
 		{
 			name:    "Missing get_color function",
 			script:  `function another_func() { return "#FFF"; }`,
-			wantErr: "Error getting get_color function from script",
+			wantErr: errorAssertingFunc,
 		},
 		{
 			name:    "Panic in script",
 			script:  `function get_color(v) {panic()};`,
-			wantErr: "Error running color script",
+			wantErr: errorCallingFunc,
 		},
 		{
 			name:    "Invalid color code returned",
 			script:  `function get_color(v) { return "#FFFF"; }`,
-			wantErr: "Invalid hex color code",
+			wantErr: errorInvalidHex,
 		},
 		{
 			name: "Color callback runtime error",
 			script: `function get_color(v) {
-               if (v < 0) throw "negative value not allowed";
+               if (v < 0) throw "THIS IS A PANIC FROM THE SCRIPT";
                return "#FFFFFF";
             }`,
-			wantErr: "negative value not allowed",
+			wantErr: "THIS IS A PANIC FROM THE SCRIPT",
 		},
 	}
 

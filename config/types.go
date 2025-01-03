@@ -1,8 +1,13 @@
 // TODO: Evalaute all interfaces
 // TODO: Update docs for new config!
-package types
+package config
 
 import "net/url"
+
+type RootConfig struct {
+	Mqtt              MqttConfig `yaml:"mqtt"`
+	DispatcherEntries []Entry    `yaml:"dispatcher-entries"`
+}
 
 type MqttConfig struct {
 	Broker   string `yaml:"broker"`
@@ -11,63 +16,6 @@ type MqttConfig struct {
 
 	// Late binding
 	BrokerAsUri *url.URL
-}
-
-type TransformDefinition struct {
-	JsonPath     string `yaml:"jsonPath"`
-	Invert       bool   `yaml:"invert,omitempty"`
-	OutputFormat string `yaml:"outputFormat,omitempty"`
-}
-
-type FilterDefinition struct {
-	IgnoreLessThan *float64 `yaml:"ignore-less-than,omitempty"`
-}
-
-type MqttTopicDefinition struct {
-	Topic     string              `yaml:"topic"`
-	Transform TransformDefinition `yaml:"transform"`
-	Filter    *FilterDefinition   `yaml:"filter,omitempty"`
-}
-
-type OuputFormat interface {
-	GetOutputFormat() string
-}
-
-func (m MqttTopicDefinition) GetOutputFormat() string {
-	return m.Transform.OutputFormat
-}
-
-func (h HttpUrlDefinition) GetOutputFormat() string {
-	return h.Transform.OutputFormat
-}
-
-type Filter interface {
-	GetFilter() *FilterDefinition
-}
-
-func (m MqttTopicDefinition) GetFilter() *FilterDefinition {
-	return m.Filter
-}
-
-type Transform interface {
-	GetJsonPath() string
-	GetInvert() bool
-}
-
-func (m MqttTopicDefinition) GetJsonPath() string {
-	return m.Transform.JsonPath
-}
-
-func (m MqttTopicDefinition) GetInvert() bool {
-	return m.Transform.Invert
-}
-
-func (h HttpUrlDefinition) GetJsonPath() string {
-	return h.Transform.JsonPath
-}
-
-func (h HttpUrlDefinition) GetInvert() bool {
-	return h.Transform.Invert
 }
 
 type Entry struct {
@@ -82,25 +30,20 @@ type Entry struct {
 	ColorScriptCallback func(float64) (string, error)
 }
 
-type operator string
+type MqttTopicDefinition struct {
+	Topic     string              `yaml:"topic"`
+	Transform TransformDefinition `yaml:"transform"`
+	Filter    *FilterDefinition   `yaml:"filter,omitempty"`
+}
 
-const (
-	None operator = ""
-	Sum  operator = "sum"
-)
+type TransformDefinition struct {
+	JsonPath     string `yaml:"jsonPath"`
+	Invert       bool   `yaml:"invert,omitempty"`
+	OutputFormat string `yaml:"outputFormat,omitempty"`
+}
 
-func (e Entry) MustAccumulate() (bool, operator) {
-	if e.Source.HttpSource != nil {
-		if len(e.Source.HttpSource.Urls) > 1 {
-			return true, operator(e.Operation)
-		}
-	}
-	if e.Source.MqttSource != nil {
-		if len(e.Source.MqttSource.TopicsToSubscribe) > 1 {
-			return true, operator(e.Operation)
-		}
-	}
-	return false, None
+type FilterDefinition struct {
+	IgnoreLessThan *float64 `yaml:"ignore-less-than,omitempty"`
 }
 
 type EntrySource struct {
@@ -122,9 +65,71 @@ type HttpUrlDefinition struct {
 	Transform TransformDefinition `yaml:"transform"`
 }
 
-type Config struct {
-	Mqtt              MqttConfig `yaml:"mqtt"`
-	DispatcherEntries []Entry    `yaml:"dispatcher-entries"`
+type TransformTarget interface {
+	GetOutputFormat() string
+}
+
+func (m MqttTopicDefinition) GetOutputFormat() string {
+	return m.Transform.OutputFormat
+}
+
+func (h HttpUrlDefinition) GetOutputFormat() string {
+	return h.Transform.OutputFormat
+}
+
+type Filter interface {
+	GetFilter() *FilterDefinition
+}
+
+func (m MqttTopicDefinition) GetFilter() *FilterDefinition {
+	return m.Filter
+}
+
+type TransformSource interface {
+	GetJsonPath() string
+	GetInvert() bool
+}
+
+type Transformers interface {
+	TransformSource
+	TransformTarget
+}
+
+func (m MqttTopicDefinition) GetJsonPath() string {
+	return m.Transform.JsonPath
+}
+
+func (m MqttTopicDefinition) GetInvert() bool {
+	return m.Transform.Invert
+}
+
+func (h HttpUrlDefinition) GetJsonPath() string {
+	return h.Transform.JsonPath
+}
+
+func (h HttpUrlDefinition) GetInvert() bool {
+	return h.Transform.Invert
+}
+
+type operator string
+
+const (
+	OperatorNone operator = ""
+	OperatorSum  operator = "sum"
+)
+
+func (e Entry) MustAccumulate() (bool, operator) {
+	if e.Source.HttpSource != nil {
+		if len(e.Source.HttpSource.Urls) > 1 {
+			return true, operator(e.Operation)
+		}
+	}
+	if e.Source.MqttSource != nil {
+		if len(e.Source.MqttSource.TopicsToSubscribe) > 1 {
+			return true, operator(e.Operation)
+		}
+	}
+	return false, OperatorNone
 }
 
 func (t MqttTopicDefinition) GetIgnoreLessThanConfig() (hasLessThanConfig bool, lessThan float64) {
