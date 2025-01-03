@@ -1,4 +1,4 @@
-package tibbergraph
+package main
 
 import (
 	_ "embed"
@@ -6,6 +6,11 @@ import (
 	"fmt"
 	"math"
 	"time"
+)
+
+var (
+	//go:embed input.json
+	inputJson string
 )
 
 const (
@@ -194,15 +199,21 @@ func getSymbolForColor(color string) string {
 	}
 }
 
-func (g *GraphData) PrintDataMatrix() {
-	printDataMatrix(*g)
-}
+func main() {
+	currentTime, _ := time.Parse(time.RFC3339, "2025-01-03T16:00:00.000+01:00")
+	jsonData := inputJson // Using the embedded JSON data
 
-func CreateDraw(jsonData string, currentTime time.Time) (graph GraphData, err error) {
 	graphData, err := createGraphPayload(currentTime, jsonData)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
-	return graphData, nil
+
+	// Print the graph data
+	jsonOutput, _ := json.MarshalIndent(graphData, "", "  ")
+	fmt.Println(string(jsonOutput))
+
+	// Print human-readable matrix
+	fmt.Println("\nHuman-readable matrix (8x32):")
+	printDataMatrix(graphData)
 }
