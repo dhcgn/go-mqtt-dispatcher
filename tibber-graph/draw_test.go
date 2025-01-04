@@ -46,6 +46,8 @@ func (mts MyTransformSource) GetInvert() bool {
 	return mts.Invert
 }
 
+// TestCreateDraw tests the CreateDraw function
+// run with output as ASCII Art Graph: go test -v -timeout 30s -run ^TestCreateDraw$ go-mqtt-dispatcher/tibber-graph
 func TestCreateDraw(t *testing.T) {
 	trans := MyTransformSource{
 		JsonPath: testJsonPath,
@@ -80,6 +82,9 @@ func TestCreateDraw(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotGraph, err := CreateDraw(tt.args.jsonData, tt.args.currentTime)
+
+			gotGraph.PrintDataMatrix()
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CreateDraw() error = %v, wantErr %v", err, tt.wantErr)
 				return

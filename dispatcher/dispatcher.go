@@ -140,8 +140,8 @@ func getHttpPayload(url string) ([]byte, error) {
 type callbackConfig struct {
 	Entry       config.Entry
 	Id          string
-	TransSource config.Transformers
-	TransTarget config.Transformers
+	TransSource config.TransformSource
+	TransTarget config.TransformTarget
 	Filter      config.Filter
 }
 
@@ -170,7 +170,7 @@ func (d *Dispatcher) getOutputAsTibberGraph(payload []byte, c config.TransformSo
 
 // callback is called when a new event is received
 func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]byte)) {
-	if c.TransSource.GetOutputAsTibberGraph() {
+	if c.TransTarget.GetOutputAsTibberGraph() {
 		p, err := d.getOutputAsTibberGraph(payload, c.TransSource)
 		if err != nil {
 			d.log("Error getting TibberGraph: " + err.Error())
