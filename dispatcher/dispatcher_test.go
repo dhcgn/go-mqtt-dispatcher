@@ -145,7 +145,7 @@ func TestCallback(t *testing.T) {
 					},
 				},
 				Id: "test/subscribe",
-				Trans: config.MqttTopicDefinition{
+				TransSource: config.MqttTopicDefinition{
 					Transform: config.TransformDefinition{JsonPath: ""},
 				},
 				Filter: config.MqttTopicDefinition{
@@ -195,7 +195,7 @@ func TestCallback(t *testing.T) {
 					},
 				},
 				Id: "test/subscribe_1",
-				Trans: config.MqttTopicDefinition{
+				TransSource: config.MqttTopicDefinition{
 					Transform: config.TransformDefinition{JsonPath: "$.value"},
 				},
 				Filter: config.MqttTopicDefinition{

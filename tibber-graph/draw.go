@@ -1,7 +1,6 @@
 package tibbergraph
 
 import (
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -198,11 +197,18 @@ func (g *GraphData) PrintDataMatrix() {
 	printDataMatrix(*g)
 }
 
+func (g *GraphData) GetJson() (string, error) {
+	j, err := json.MarshalIndent(g, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(j), nil
+}
+
 func CreateDraw(jsonData string, currentTime time.Time) (graph GraphData, err error) {
 	graphData, err := createGraphPayload(currentTime, jsonData)
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		return GraphData{}, err
 	}
 	return graphData, nil
 }

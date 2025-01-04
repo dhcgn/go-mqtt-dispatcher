@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-mqtt-dispatcher/config"
+	tibbergraph "go-mqtt-dispatcher/tibber-graph"
+	"go-mqtt-dispatcher/utils"
 	"io"
 	"net/http"
 	"strconv"
@@ -69,7 +71,7 @@ func (d *Dispatcher) runHttp(entry config.Entry) {
 					return
 				}
 				for _, topicPub := range entry.TopicsToPublish {
-					c := callbackConfig{Entry: entry, Id: url, Trans: urlDef, Filter: topicPub}
+					c := callbackConfig{Entry: entry, Id: url, TransSource: urlDef, TransTarget: topicPub, Filter: topicPub}
 					d.callback(payload, c, func(msg []byte) {
 						d.mqttClient.Publish(topicPub.Topic, msg)
 					})
@@ -99,7 +101,7 @@ func (d *Dispatcher) runMqtt(entry config.Entry) {
 		err := d.mqttClient.Subscribe(topicSub.Topic, func(payload []byte) {
 			d.log("Received payload for " + topicSub.Topic)
 			for _, topicPub := range entry.TopicsToPublish {
-				c := callbackConfig{Entry: entry, Id: topicSub.Topic, Trans: topicSub, Filter: topicPub}
+				c := callbackConfig{Entry: entry, Id: topicSub.Topic, TransSource: topicSub, TransTarget: topicPub, Filter: topicPub}
 				d.callback(payload, c, func(msg []byte) {
 					d.mqttClient.Publish(topicPub.Topic, msg)
 				})
@@ -136,15 +138,50 @@ func getHttpPayload(url string) ([]byte, error) {
 }
 
 type callbackConfig struct {
-	Entry  config.Entry
-	Id     string
-	Trans  config.Transformers
-	Filter config.Filter
+	Entry       config.Entry
+	Id          string
+	TransSource config.Transformers
+	TransTarget config.Transformers
+	Filter      config.Filter
+}
+
+var errorPayload = []byte(`{"text": "ERR"}`)
+
+func (d *Dispatcher) getOutputAsTibberGraph(payload []byte, c config.TransformSource) ([]byte, error) {
+
+	payload = utils.TransformPayloadWithJsonPath(payload, c)
+
+	t := time.Now()
+	g, err := tibbergraph.CreateDraw(string(payload), t)
+	if err != nil {
+		d.log("Error creating graph: " + err.Error())
+		return nil, err
+	}
+	j, err := g.GetJson()
+	if err != nil {
+		d.log("Error getting json: " + err.Error())
+		return nil, err
+	}
+
+	d.log("Generated TibberGraph with " + strconv.Itoa(len(g.Draw)) + " rows and with time: " + t.String())
+
+	return []byte(j), nil
 }
 
 // callback is called when a new event is received
 func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]byte)) {
-	val, err := d.transformPayload(payload, c.Trans)
+	if c.TransSource.GetOutputAsTibberGraph() {
+		p, err := d.getOutputAsTibberGraph(payload, c.TransSource)
+		if err != nil {
+			d.log("Error getting TibberGraph: " + err.Error())
+			publish(errorPayload)
+			return
+		}
+		publish(p)
+		return
+	}
+
+	val, err := d.transformPayload(payload, c.TransSource)
 	if err != nil {
 		d.log("transform error: " + err.Error())
 		return
@@ -183,7 +220,7 @@ func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]b
 	pubMsg := publishMessage{}
 
 	// Output Format
-	formatted := outputFormat(val, c.Trans)
+	formatted := outputFormat(val, c.TransTarget)
 	pubMsg.Text = formatted
 
 	// Add Color
@@ -201,7 +238,7 @@ func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]b
 	jsonData, err := json.Marshal(pubMsg)
 	if err != nil {
 		d.log(fmt.Sprintf("Error marshaling json: %v", err))
-		publish([]byte(`{"text": "ERR"}`))
+		publish(errorPayload)
 	}
 
 	publish(jsonData)
