@@ -81,40 +81,35 @@ func TestCreateDraw(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inputData, err := parsePriceData(tt.args.jsonData)
+
+			pi, err := parsePriceData(tt.args.jsonData)
 			if err != nil {
-				fmt.Println("Error parsing price data:", err)
+				t.Errorf("createStats() error = %v", err)
 				return
 			}
 
-			allData := append(inputData.PriceInfo.Today, inputData.PriceInfo.Tomorrow...)
+			stats, err := createStats(pi, tt.args.currentTime)
+			if err != nil {
+				t.Errorf("createStats() error = %v", err)
+				return
+			}
 
-			// print the max past 3 hours
+			// Print stats for verification
+			fmt.Println("Test date:", stats.UsedTime.Format("2006-01-02 15:04"))
 			fmt.Println("Max past 3 hours:")
-			for i := max(0, findCurrentPriceIndex(allData, tt.args.currentTime)-3); i < findCurrentPriceIndex(allData, tt.args.currentTime); i++ {
-				fmt.Printf("Hour: %s, Price: %.4f\n", allData[i].StartsAt.Format("15:04"), allData[i].Total)
+			for _, hour := range stats.MaxLast3Hours {
+				fmt.Printf("Hour: %s, Price: %.4f\n", hour.StartsAt.Format("15:04"), hour.Total)
 			}
-
-			// print the current hour
 			fmt.Println("Current hour:")
-			fmt.Printf("Hour: %s, Price: %.4f\n", inputData.PriceInfo.Current.StartsAt.Format("15:04"), inputData.PriceInfo.Current.Total)
-
-			// print the max 5 future hours
+			fmt.Printf("Hour: %s, Price: %.4f\n", stats.CurrentHour.StartsAt.Format("15:04"), stats.CurrentHour.Total)
 			fmt.Println("Max 5 future hours:")
-			for i := findCurrentPriceIndex(allData, tt.args.currentTime) + 1; i < min(len(allData), findCurrentPriceIndex(allData, tt.args.currentTime)+6); i++ {
-				fmt.Printf("Hour: %s, Price: %.4f\n", allData[i].StartsAt.Format("15:04"), allData[i].Total)
+			for _, hour := range stats.MaxNext5Hours {
+				fmt.Printf("Hour: %s, Price: %.4f\n", hour.StartsAt.Format("15:04"), hour.Total)
 			}
-
-			// how many hours are there in the past
-			pastHours := findCurrentPriceIndex(allData, tt.args.currentTime)
-			fmt.Printf("Number of past hours: %d\n", pastHours)
-
-			// how many hours are there in the future
-			futureHours := len(allData) - pastHours - 1
-			fmt.Printf("Number of future hours: %d\n", futureHours)
+			fmt.Printf("Number of past hours: %d\n", stats.NumPastHours)
+			fmt.Printf("Number of future hours: %d\n", stats.NumFutureHours)
 
 			gotGraph, err := CreateDraw(tt.args.jsonData, tt.args.currentTime)
-
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CreateDraw() error = %v, wantErr %v", err, tt.wantErr)
 				return
