@@ -128,6 +128,6 @@ dispatcher-entries:
               jsonPath: "$.data.viewer.homes[0].currentSubscription"
         interval_sec: 60
     topics-to-publish:
-      - topic: "awtrix_demo/custom/tibber price"
+      - topic: "awtrix_demo/custom/tibber price graph"
         transform:
           output-as-tibber-graph: true

@@ -39,7 +39,38 @@ Docker image available for easy deployment.
 
 ![Alt](https://repobeats.axiom.co/api/embed/b1afc9cf8420a60d30dabbbfef1f245e67193a02.svg "Repobeats analytics image")
 
-## Use case:
+
+## Personal Demonstration
+
+### Product
+
+![](/README.md_assets/product.jpg)
+
+### Wattage of the house
+
+![](/README.md_assets/house.jpeg)
+
+### Solar power
+
+![](/README.md_assets/solar.jpeg)
+
+### Tibber price (price per kWh in this hour)
+
+![](/README.md_assets/tibber_price.jpeg)
+
+### Tibber price graph
+
+![](/README.md_assets/tibber_price_graph.jpeg)
+
+Legende:
+
+- Grey: the past three hours
+- Blue: the current hour
+- Yellow: the next hour if more expensive than the previous hour
+- Green: the next hour if cheaper than the previous hour
+- Red: highest price the this graph
+
+## Use case
 
 Send data to the [awtrix 3 mqtt api](https://blueforcer.github.io/awtrix3/#/api?id=example-1), the current feature [mqtt-placeholder](https://blueforcer.github.io/awtrix3/#/api?id=mqtt-placeholder) is not sufficient for all use cases.
 
@@ -278,7 +309,7 @@ dispatcher-entries:
               jsonPath: "$.data.viewer.homes[0].currentSubscription"
         interval_sec: 60
     topics-to-publish:
-      - topic: "awtrix_demo/custom/tibber price"
+      - topic: "awtrix_demo/custom/tibber price graph"
         transform:
           output-as-tibber-graph: true
 ```
