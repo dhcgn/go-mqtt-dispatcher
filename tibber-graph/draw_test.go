@@ -87,10 +87,12 @@ func TestCreateDraw(t *testing.T) {
 				return
 			}
 
+			allData := append(inputData.PriceInfo.Today, inputData.PriceInfo.Tomorrow...)
+
 			// print the max past 3 hours
 			fmt.Println("Max past 3 hours:")
-			for i := max(0, findCurrentPriceIndex(inputData.PriceInfo.Today, tt.args.currentTime)-3); i < findCurrentPriceIndex(inputData.PriceInfo.Today, tt.args.currentTime); i++ {
-				fmt.Printf("Hour: %s, Price: %.4f\n", inputData.PriceInfo.Today[i].StartsAt.Format("15:04"), inputData.PriceInfo.Today[i].Total)
+			for i := max(0, findCurrentPriceIndex(allData, tt.args.currentTime)-3); i < findCurrentPriceIndex(allData, tt.args.currentTime); i++ {
+				fmt.Printf("Hour: %s, Price: %.4f\n", allData[i].StartsAt.Format("15:04"), allData[i].Total)
 			}
 
 			// print the current hour
@@ -99,9 +101,17 @@ func TestCreateDraw(t *testing.T) {
 
 			// print the max 5 future hours
 			fmt.Println("Max 5 future hours:")
-			for i := findCurrentPriceIndex(inputData.PriceInfo.Today, tt.args.currentTime) + 1; i < min(len(inputData.PriceInfo.Today), findCurrentPriceIndex(inputData.PriceInfo.Today, tt.args.currentTime)+6); i++ {
-				fmt.Printf("Hour: %s, Price: %.4f\n", inputData.PriceInfo.Today[i].StartsAt.Format("15:04"), inputData.PriceInfo.Today[i].Total)
+			for i := findCurrentPriceIndex(allData, tt.args.currentTime) + 1; i < min(len(allData), findCurrentPriceIndex(allData, tt.args.currentTime)+6); i++ {
+				fmt.Printf("Hour: %s, Price: %.4f\n", allData[i].StartsAt.Format("15:04"), allData[i].Total)
 			}
+
+			// how many hours are there in the past
+			pastHours := findCurrentPriceIndex(allData, tt.args.currentTime)
+			fmt.Printf("Number of past hours: %d\n", pastHours)
+
+			// how many hours are there in the future
+			futureHours := len(allData) - pastHours - 1
+			fmt.Printf("Number of future hours: %d\n", futureHours)
 
 			gotGraph, err := CreateDraw(tt.args.jsonData, tt.args.currentTime)
 

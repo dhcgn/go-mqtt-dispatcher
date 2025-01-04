@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	DRAW_START_X               = 0
+	// Shift the entire graph a bit to the right so past hours have valid (>=0) X.
+	DRAW_START_X               = 3
 	THRESHOLD_ONE_PIXEL        = 0.1000
 	THRESHOLD_TWO_PIXELS       = 0.3000
 	THRESHOLD_THREE_PIXELS     = 0.5000
@@ -64,22 +65,33 @@ func CreateDraw(jsonData string, currentTime time.Time) (graph GraphData, err er
 
 	// Draw past 3 hours
 	for i := max(0, currentIndex-3); i < currentIndex; i++ {
-		graphData.Draw = append(graphData.Draw, createDrawCommand(i-currentIndex+DRAW_START_X, allData[i].Total, currentPrice, "#999999"))
+		graphData.Draw = append(
+			graphData.Draw,
+			createDrawCommand(i-currentIndex+DRAW_START_X, allData[i].Total, currentPrice, "#999999"), // Gray
+		)
 	}
 
-	// Draw current hour
-	graphData.Draw = append(graphData.Draw, createDrawCommand(DRAW_START_X, currentPrice, currentPrice, "#0000FF"))
+	// Draw current hour (Blue)
+	graphData.Draw = append(
+		graphData.Draw,
+		createDrawCommand(DRAW_START_X, currentPrice, currentPrice, "#0000FF"),
+	)
 
 	// Draw future hours
 	for i := currentIndex + 1; i < min(len(allData), currentIndex+29); i++ {
-		color := "#00FF00"
+		color := "#00FF00" // Green by default
+		// If the price went up from the previous hour, mark it Yellow
 		if i > currentIndex+1 && allData[i].Total > allData[i-1].Total {
 			color = "#FFFF00"
 		}
+		// If it's the absolute highest price, mark it Red
 		if allData[i].Total == highestPrice {
 			color = "#FF0000"
 		}
-		graphData.Draw = append(graphData.Draw, createDrawCommand(i-currentIndex+DRAW_START_X, allData[i].Total, currentPrice, color))
+		graphData.Draw = append(
+			graphData.Draw,
+			createDrawCommand(i-currentIndex+DRAW_START_X, allData[i].Total, currentPrice, color),
+		)
 	}
 
 	return graphData, nil
@@ -90,6 +102,7 @@ func createDrawCommand(x int, price, currentPrice float64, color string) DrawCom
 	return DrawCommand{DP: [3]interface{}{x, y, color}}
 }
 
+// For now, we keep it simple and just return 4 for Y so everything lines up in one row.
 func calculateY(price, currentPrice float64) int {
 	return 4
 }
@@ -134,6 +147,7 @@ func min(a, b int) int {
 }
 
 func (g *GraphData) PrintDataMatrix() {
+	// We create an 8-row, 32-column matrix.
 	matrix := make([][]string, 8)
 	for i := range matrix {
 		matrix[i] = make([]string, 32)
@@ -142,6 +156,7 @@ func (g *GraphData) PrintDataMatrix() {
 		}
 	}
 
+	// Draw all commands onto the matrix (if they fit).
 	for _, cmd := range g.Draw {
 		x := toInt(cmd.DP[0])
 		y := toInt(cmd.DP[1])
@@ -152,7 +167,7 @@ func (g *GraphData) PrintDataMatrix() {
 		}
 	}
 
-	// Print column numbers
+	// Print column numbers (two rows: tens, then ones)
 	fmt.Print("   ")
 	for i := 0; i < 32; i++ {
 		fmt.Printf("%d", i/10)
@@ -182,7 +197,6 @@ func (g *GraphData) PrintDataMatrix() {
 	fmt.Println(". - Empty")
 }
 
-// Helper function to convert interface{} to int
 func toInt(value interface{}) int {
 	switch v := value.(type) {
 	case int:
@@ -190,7 +204,7 @@ func toInt(value interface{}) int {
 	case float64:
 		return int(v)
 	default:
-		return 0 // or handle error as appropriate
+		return 0
 	}
 }
 
