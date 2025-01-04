@@ -81,9 +81,29 @@ func TestCreateDraw(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotGraph, err := CreateDraw(tt.args.jsonData, tt.args.currentTime)
+			inputData, err := parsePriceData(tt.args.jsonData)
+			if err != nil {
+				fmt.Println("Error parsing price data:", err)
+				return
+			}
 
-			gotGraph.PrintDataMatrix()
+			// print the max past 3 hours
+			fmt.Println("Max past 3 hours:")
+			for i := max(0, findCurrentPriceIndex(inputData.PriceInfo.Today, tt.args.currentTime)-3); i < findCurrentPriceIndex(inputData.PriceInfo.Today, tt.args.currentTime); i++ {
+				fmt.Printf("Hour: %s, Price: %.4f\n", inputData.PriceInfo.Today[i].StartsAt.Format("15:04"), inputData.PriceInfo.Today[i].Total)
+			}
+
+			// print the current hour
+			fmt.Println("Current hour:")
+			fmt.Printf("Hour: %s, Price: %.4f\n", inputData.PriceInfo.Current.StartsAt.Format("15:04"), inputData.PriceInfo.Current.Total)
+
+			// print the max 5 future hours
+			fmt.Println("Max 5 future hours:")
+			for i := findCurrentPriceIndex(inputData.PriceInfo.Today, tt.args.currentTime) + 1; i < min(len(inputData.PriceInfo.Today), findCurrentPriceIndex(inputData.PriceInfo.Today, tt.args.currentTime)+6); i++ {
+				fmt.Printf("Hour: %s, Price: %.4f\n", inputData.PriceInfo.Today[i].StartsAt.Format("15:04"), inputData.PriceInfo.Today[i].Total)
+			}
+
+			gotGraph, err := CreateDraw(tt.args.jsonData, tt.args.currentTime)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CreateDraw() error = %v, wantErr %v", err, tt.wantErr)
@@ -92,6 +112,8 @@ func TestCreateDraw(t *testing.T) {
 			if len(gotGraph.Draw) < tt.wantGraphDrawnPixelGreaterThan {
 				t.Errorf("CreateDraw() = %v, want %v", len(gotGraph.Draw), tt.wantGraphDrawnPixelGreaterThan)
 			}
+
+			gotGraph.PrintDataMatrix()
 		})
 	}
 }

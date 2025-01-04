@@ -3,24 +3,17 @@ package tibbergraph
 import (
 	"encoding/json"
 	"fmt"
-	"math"
+	"sort"
 	"time"
 )
 
 const (
-	// X-axis starting point for drawing
-	DRAW_START_X = 16
-
-	// Y-axis thresholds for pixel changes
-	THRESHOLD_ONE_PIXEL    = 0.1000
-	THRESHOLD_TWO_PIXELS   = 0.3000
-	THRESHOLD_THREE_PIXELS = 0.5000
-
-	// Threshold for large price difference
+	DRAW_START_X               = 0
+	THRESHOLD_ONE_PIXEL        = 0.1000
+	THRESHOLD_TWO_PIXELS       = 0.3000
+	THRESHOLD_THREE_PIXELS     = 0.5000
 	THRESHOLD_LARGE_DIFFERENCE = 0.5000
-
-	// Y-axis center point
-	Y_CENTER = 3
+	Y_CENTER                   = 3
 )
 
 type PriceData struct {
@@ -36,7 +29,13 @@ type DrawCommand struct {
 	DP [3]interface{} `json:"dp"`
 }
 
-func createGraphPayload(currentTime time.Time, jsonData string) (GraphData, error) {
+func parsePriceData(jsonData string) (struct {
+	PriceInfo struct {
+		Current  PriceData   `json:"current"`
+		Today    []PriceData `json:"today"`
+		Tomorrow []PriceData `json:"tomorrow"`
+	} `json:"priceInfo"`
+}, error) {
 	var data struct {
 		PriceInfo struct {
 			Current  PriceData   `json:"current"`
@@ -44,8 +43,12 @@ func createGraphPayload(currentTime time.Time, jsonData string) (GraphData, erro
 			Tomorrow []PriceData `json:"tomorrow"`
 		} `json:"priceInfo"`
 	}
-
 	err := json.Unmarshal([]byte(jsonData), &data)
+	return data, err
+}
+
+func CreateDraw(jsonData string, currentTime time.Time) (graph GraphData, err error) {
+	data, err := parsePriceData(jsonData)
 	if err != nil {
 		return GraphData{}, err
 	}
@@ -57,6 +60,8 @@ func createGraphPayload(currentTime time.Time, jsonData string) (GraphData, erro
 	graphData := GraphData{}
 	currentPrice := data.PriceInfo.Current.Total
 
+	highestPrice := findHighestPrice(allData)
+
 	// Draw past 3 hours
 	for i := max(0, currentIndex-3); i < currentIndex; i++ {
 		graphData.Draw = append(graphData.Draw, createDrawCommand(i-currentIndex+DRAW_START_X, allData[i].Total, currentPrice, "#999999"))
@@ -66,9 +71,12 @@ func createGraphPayload(currentTime time.Time, jsonData string) (GraphData, erro
 	graphData.Draw = append(graphData.Draw, createDrawCommand(DRAW_START_X, currentPrice, currentPrice, "#0000FF"))
 
 	// Draw future hours
-	for i := currentIndex + 1; i < min(len(allData), currentIndex+16); i++ {
+	for i := currentIndex + 1; i < min(len(allData), currentIndex+29); i++ {
 		color := "#00FF00"
-		if allData[i].Total > currentPrice {
+		if i > currentIndex+1 && allData[i].Total > allData[i-1].Total {
+			color = "#FFFF00"
+		}
+		if allData[i].Total == highestPrice {
 			color = "#FF0000"
 		}
 		graphData.Draw = append(graphData.Draw, createDrawCommand(i-currentIndex+DRAW_START_X, allData[i].Total, currentPrice, color))
@@ -83,27 +91,13 @@ func createDrawCommand(x int, price, currentPrice float64, color string) DrawCom
 }
 
 func calculateY(price, currentPrice float64) int {
-	diff := price - currentPrice
-	absDiff := math.Abs(diff)
-	y := Y_CENTER
-
-	if absDiff < THRESHOLD_ONE_PIXEL {
-		y -= int(math.Copysign(1, diff))
-	} else if absDiff < THRESHOLD_TWO_PIXELS {
-		y -= int(math.Copysign(2, diff))
-	} else {
-		y -= int(math.Copysign(3, diff))
-		if absDiff > THRESHOLD_LARGE_DIFFERENCE {
-			return y
-		}
-	}
-
-	return y
+	return 4
 }
 
 func sortPriceData(data []PriceData) {
-	// Implement sorting logic here
-	// For this example, we assume the data is already sorted
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].StartsAt.Before(data[j].StartsAt)
+	})
 }
 
 func findCurrentPriceIndex(data []PriceData, currentTime time.Time) int {
@@ -113,6 +107,16 @@ func findCurrentPriceIndex(data []PriceData, currentTime time.Time) int {
 		}
 	}
 	return len(data) - 1
+}
+
+func findHighestPrice(data []PriceData) float64 {
+	highest := 0.0
+	for _, d := range data {
+		if d.Total > highest {
+			highest = d.Total
+		}
+	}
+	return highest
 }
 
 func max(a, b int) int {
@@ -129,7 +133,7 @@ func min(a, b int) int {
 	return b
 }
 
-func printDataMatrix(data GraphData) {
+func (g *GraphData) PrintDataMatrix() {
 	matrix := make([][]string, 8)
 	for i := range matrix {
 		matrix[i] = make([]string, 32)
@@ -138,12 +142,14 @@ func printDataMatrix(data GraphData) {
 		}
 	}
 
-	for _, cmd := range data.Draw {
-		x := cmd.DP[0].(int)
-		y := cmd.DP[1].(int)
+	for _, cmd := range g.Draw {
+		x := toInt(cmd.DP[0])
+		y := toInt(cmd.DP[1])
 		color := cmd.DP[2].(string)
 		symbol := getSymbolForColor(color)
-		matrix[y][x] = symbol
+		if x >= 0 && x < 32 && y >= 0 && y < 8 {
+			matrix[y][x] = symbol
+		}
 	}
 
 	// Print column numbers
@@ -171,9 +177,21 @@ func printDataMatrix(data GraphData) {
 	fmt.Println("# - Past (Gray)")
 	fmt.Println("O - Current (Blue)")
 	fmt.Println("+ - Future, Lower Price (Green)")
-	fmt.Println("X - Future, Higher Price (Red)")
-	fmt.Printf("* - Large Price Difference (White, >%.4f)\n", THRESHOLD_LARGE_DIFFERENCE)
+	fmt.Println("* - Future, Higher Price (Yellow)")
+	fmt.Println("X - Highest Price (Red)")
 	fmt.Println(". - Empty")
+}
+
+// Helper function to convert interface{} to int
+func toInt(value interface{}) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	default:
+		return 0 // or handle error as appropriate
+	}
 }
 
 func getSymbolForColor(color string) string {
@@ -184,17 +202,13 @@ func getSymbolForColor(color string) string {
 		return "O" // Current (Blue)
 	case "#00FF00":
 		return "+" // Future, Lower Price (Green)
+	case "#FFFF00":
+		return "*" // Future, Higher Price (Yellow)
 	case "#FF0000":
-		return "X" // Future, Higher Price (Red)
-	case "#FFFFFF":
-		return "*" // Large Price Difference (White)
+		return "X" // Highest Price (Red)
 	default:
 		return "?"
 	}
-}
-
-func (g *GraphData) PrintDataMatrix() {
-	printDataMatrix(*g)
 }
 
 func (g *GraphData) GetJson() (string, error) {
@@ -203,12 +217,4 @@ func (g *GraphData) GetJson() (string, error) {
 		return "", err
 	}
 	return string(j), nil
-}
-
-func CreateDraw(jsonData string, currentTime time.Time) (graph GraphData, err error) {
-	graphData, err := createGraphPayload(currentTime, jsonData)
-	if err != nil {
-		return GraphData{}, err
-	}
-	return graphData, nil
 }
