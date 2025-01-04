@@ -170,7 +170,7 @@ func (d *Dispatcher) getOutputAsTibberGraph(payload []byte, c config.TransformSo
 
 // callback is called when a new event is received
 func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]byte)) {
-	if c.TransTarget.GetOutputAsTibberGraph() {
+	if c.TransTarget != nil && c.TransTarget.GetOutputAsTibberGraph() {
 		p, err := d.getOutputAsTibberGraph(payload, c.TransSource)
 		if err != nil {
 			d.log("Error getting TibberGraph: " + err.Error())
