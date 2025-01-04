@@ -13,25 +13,30 @@ const (
 	Y_CENTER     = 3
 )
 
+// PriceData represents a single hour’s price info.
 type PriceData struct {
 	Total    float64   `json:"total"`
 	StartsAt time.Time `json:"startsAt"`
 }
 
+// GraphData holds all draw commands for ASCII matrix or JSON output.
 type GraphData struct {
 	Draw []DrawCommand `json:"draw"`
 }
 
+// DrawCommand is a single “point” or symbol in our ASCII matrix.
 type DrawCommand struct {
 	DP [3]interface{} `json:"dp"`
 }
 
+// PriceInfo wraps current + today + tomorrow slices.
 type PriceInfo struct {
 	Current  PriceData   `json:"current"`
 	Today    []PriceData `json:"today"`
 	Tomorrow []PriceData `json:"tomorrow"`
 }
 
+// parsePriceData pulls the relevant portion of JSON into our struct.
 func parsePriceData(jsonData string) (PriceInfo, error) {
 	var data struct {
 		PriceInfo PriceInfo `json:"priceInfo"`
@@ -40,6 +45,8 @@ func parsePriceData(jsonData string) (PriceInfo, error) {
 	return data.PriceInfo, err
 }
 
+// CreateDraw combines past/current/future hours into a set of draw commands
+// and maps them onto a 32x8 ASCII matrix. Missing hours are simply skipped.
 func CreateDraw(jsonData string, currentTime time.Time) (GraphData, error) {
 	pi, err := parsePriceData(jsonData)
 	if err != nil {
@@ -50,18 +57,36 @@ func CreateDraw(jsonData string, currentTime time.Time) (GraphData, error) {
 	allData := append(pi.Today, pi.Tomorrow...)
 	sortPriceData(allData)
 
+	// Find index of current hour in sorted data
 	currentIndex := findCurrentPriceIndex(allData, currentTime)
-	// Clamp currentIndex to valid range
 	if currentIndex < 0 {
 		currentIndex = 0
 	} else if currentIndex >= len(allData) {
 		currentIndex = len(allData) - 1
 	}
 
-	currentPrice := pi.Current.Total
+	// Find extremes for y-axis mapping
+	lowestPrice := findLowestPrice(allData)
 	highestPrice := findHighestPrice(allData)
+	rangePrice := highestPrice - lowestPrice
+	if rangePrice <= 0 {
+		rangePrice = 1.0 // avoid div-by-zero if all prices are identical
+	}
+
+	// Helper closure to map price -> row [0..7], top=highest, bottom=lowest
+	mapPriceToY := func(p float64) int {
+		scaled := 7.0 - ((p - lowestPrice) / rangePrice * 7.0)
+		y := int(scaled + 0.5) // round
+		if y < 0 {
+			y = 0
+		} else if y > 7 {
+			y = 7
+		}
+		return y
+	}
 
 	var graph GraphData
+	currentPrice := pi.Current.Total
 
 	//----------------------------------------------------------------------
 	// 1) Draw up to 3 past hours (gray)
@@ -69,14 +94,11 @@ func CreateDraw(jsonData string, currentTime time.Time) (GraphData, error) {
 	startPast := max(0, currentIndex-3)
 	for i := startPast; i < currentIndex; i++ {
 		x := (i - currentIndex) + DRAW_START_X
-		// Skip if out of range, but do not break
 		if x < 0 || x >= 32 {
-			continue
+			continue // skip if out of 32-column range
 		}
-		graph.Draw = append(
-			graph.Draw,
-			createDrawCommand(x, allData[i].Total, currentPrice, "#999999"),
-		)
+		y := mapPriceToY(allData[i].Total)
+		graph.Draw = append(graph.Draw, DrawCommand{DP: [3]interface{}{x, y, "#999999"}})
 	}
 
 	//----------------------------------------------------------------------
@@ -84,49 +106,50 @@ func CreateDraw(jsonData string, currentTime time.Time) (GraphData, error) {
 	//----------------------------------------------------------------------
 	if currentIndex >= 0 && currentIndex < len(allData) {
 		if DRAW_START_X >= 0 && DRAW_START_X < 32 {
-			graph.Draw = append(
-				graph.Draw,
-				createDrawCommand(DRAW_START_X, currentPrice, currentPrice, "#0000FF"),
-			)
+			y := mapPriceToY(currentPrice)
+			graph.Draw = append(graph.Draw, DrawCommand{DP: [3]interface{}{DRAW_START_X, y, "#0000FF"}})
 		}
 	}
 
 	//----------------------------------------------------------------------
-	// 3) Draw all *actual* future hours (no missing placeholders)
+	// 3) Draw future hours (no placeholders for missing ones)
 	//----------------------------------------------------------------------
 	for i := currentIndex + 1; i < len(allData); i++ {
 		x := (i - currentIndex) + DRAW_START_X
-		// Skip if out of the 32-column range
 		if x < 0 || x >= 32 {
-			continue
+			continue // just skip out-of-range columns
 		}
+		futurePrice := allData[i].Total
+		y := mapPriceToY(futurePrice)
 
-		// Default color for future is Green
-		color := "#00FF00"
-		// If this price is higher than the *previous hour*, mark it Yellow
-		if i > 0 && allData[i].Total > allData[i-1].Total {
+		color := "#00FF00" // default green
+		// If this price is higher than the previous hour’s price, mark yellow
+		if i > 0 && futurePrice > allData[i-1].Total {
 			color = "#FFFF00"
 		}
-		// If it's the absolute highest price, mark it Red
-		if allData[i].Total == highestPrice {
+		// If it's the absolute highest, mark red
+		if futurePrice == highestPrice {
 			color = "#FF0000"
 		}
 
-		graph.Draw = append(
-			graph.Draw,
-			createDrawCommand(x, allData[i].Total, currentPrice, color),
-		)
+		graph.Draw = append(graph.Draw, DrawCommand{DP: [3]interface{}{x, y, color}})
 	}
 
 	return graph, nil
 }
 
-// Make findCurrentPriceIndex more defensive if everything is after currentTime
+// sortPriceData sorts by StartsAt ascending.
+func sortPriceData(data []PriceData) {
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].StartsAt.Before(data[j].StartsAt)
+	})
+}
+
+// findCurrentPriceIndex returns the index of the hour that is current
+// or the last hour before currentTime. If all are after currentTime, returns 0 or -1.
 func findCurrentPriceIndex(data []PriceData, currentTime time.Time) int {
 	for i, d := range data {
 		if d.StartsAt.After(currentTime) {
-			// If *all* data is after currentTime, i - 1 will be -1.
-			// Return 0 or -1 here, depending on your preference:
 			if i == 0 {
 				return 0
 			}
@@ -136,23 +159,21 @@ func findCurrentPriceIndex(data []PriceData, currentTime time.Time) int {
 	return len(data) - 1
 }
 
-// createDrawCommand is a small helper to build a DrawCommand at (x, y) with the given color.
-func createDrawCommand(x int, price, currentPrice float64, color string) DrawCommand {
-	y := calculateY(price, currentPrice)
-	return DrawCommand{DP: [3]interface{}{x, y, color}}
+// findLowestPrice scans all data for min price.
+func findLowestPrice(data []PriceData) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+	lowest := data[0].Total
+	for _, d := range data {
+		if d.Total < lowest {
+			lowest = d.Total
+		}
+	}
+	return lowest
 }
 
-// For a simple horizontal "line," keep Y = 4 for all data points.
-func calculateY(price, currentPrice float64) int {
-	return 4
-}
-
-func sortPriceData(data []PriceData) {
-	sort.Slice(data, func(i, j int) bool {
-		return data[i].StartsAt.Before(data[j].StartsAt)
-	})
-}
-
+// findHighestPrice scans all data for max price.
 func findHighestPrice(data []PriceData) float64 {
 	var highest float64
 	for _, d := range data {
@@ -178,7 +199,6 @@ func min(a, b int) int {
 }
 
 // PrintDataMatrix draws an 8 (rows) x 32 (columns) ASCII matrix.
-// Each DrawCommand is placed if it falls within (0..31)x(0..7).
 func (g *GraphData) PrintDataMatrix() {
 	const rows, cols = 8, 32
 
@@ -213,7 +233,7 @@ func (g *GraphData) PrintDataMatrix() {
 	}
 	fmt.Println()
 
-	// Print each row
+	// Print rows
 	for r := 0; r < rows; r++ {
 		fmt.Printf("%d: ", r)
 		for c := 0; c < cols; c++ {
@@ -244,6 +264,7 @@ func toInt(value interface{}) int {
 	}
 }
 
+// Map colors to ASCII symbols
 func getSymbolForColor(color string) string {
 	switch color {
 	case "#999999":
@@ -257,10 +278,11 @@ func getSymbolForColor(color string) string {
 	case "#FF0000":
 		return "X" // Highest Price (Red)
 	default:
-		return "?"
+		return "?" // fallback
 	}
 }
 
+// GetJson returns the GraphData as a pretty-printed JSON string.
 func (g *GraphData) GetJson() (string, error) {
 	j, err := json.MarshalIndent(g, "", "  ")
 	if err != nil {
@@ -269,6 +291,7 @@ func (g *GraphData) GetJson() (string, error) {
 	return string(j), nil
 }
 
+// Stats is just an extra struct for demonstration (not core to drawing).
 type Stats struct {
 	UsedTime time.Time
 
@@ -280,6 +303,7 @@ type Stats struct {
 	NumFutureHours int
 }
 
+// createStats is a helper if you need stats. Not strictly required for the ASCII graph.
 func createStats(pi PriceInfo, currentTime time.Time) (Stats, error) {
 	allData := append(pi.Today, pi.Tomorrow...)
 
