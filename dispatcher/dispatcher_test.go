@@ -145,8 +145,11 @@ func TestCallback(t *testing.T) {
 					},
 				},
 				Id: "test/subscribe",
-				Trans: config.MqttTopicDefinition{
+				TransSource: config.MqttTopicDefinition{
 					Transform: config.TransformDefinition{JsonPath: ""},
+				},
+				TransTarget: config.MqttTopicDefinition{
+					Transform: config.TransformDefinition{},
 				},
 				Filter: config.MqttTopicDefinition{
 					Filter: &config.FilterDefinition{IgnoreLessThan: new(float64)},
@@ -195,8 +198,11 @@ func TestCallback(t *testing.T) {
 					},
 				},
 				Id: "test/subscribe_1",
-				Trans: config.MqttTopicDefinition{
+				TransSource: config.MqttTopicDefinition{
 					Transform: config.TransformDefinition{JsonPath: "$.value"},
+				},
+				TransTarget: config.MqttTopicDefinition{
+					Transform: config.TransformDefinition{},
 				},
 				Filter: config.MqttTopicDefinition{
 					Filter: &config.FilterDefinition{IgnoreLessThan: new(float64)},
