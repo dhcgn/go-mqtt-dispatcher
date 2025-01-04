@@ -148,15 +148,22 @@ Topic: `awtrix_b77810/custom/house power`
 ### Config
 
 ```yaml
+# check with 
 mqtt:
-  broker: mqtt://192.168.1.1:1883
+  broker: mqtt://192.168.3.10:1883
 
-topics:
-  - subscribe: "shellies/shellypro3em-0000000000/status/em:0"
-    transform:
-      jsonPath: "$.total_act_power"
-      outputFormat: "%.0f W"
-    publish: "awtrix_0000000000/custom/house power"
+dispatcher-entries:
+  - name: "Shelly Pro 3EM to topic house power"
+    source:
+      mqtt:
+        topics-to-subscribe: 
+          - topic: "shellies/shellypro3em-00000000000000000/status/em:0"
+            transform:
+              jsonPath: "$.total_act_power"
+    topics-to-publish: 
+      - topic: "awtrix_demo/custom/house power"
+        transform:
+          outputFormat: "%.0f W"
     icon: "redplug"
     color-script: |
       function get_color(v) {
@@ -172,52 +179,54 @@ topics:
           return "#FFC0CB"; // pink
         }
       }
-topics_accumulated:
-  - group: "Solar"
-    publish: "awtrix_000000000/custom/solar power"
+
+  - name: "Solar power to topic solar power"
+    source:
+      mqtt:
+        topics-to-subscribe: 
+          - topic: "shellies/shellypro4pm-00000000000000/status/switch:2"
+            transform:
+              jsonPath: "$.apower"
+              invert: true
+          - topic: "shellies/shellyplusplugs-000000000000000/status/switch:0"
+            transform:
+              jsonPath: "$.apower"
+    topics-to-publish: 
+      - topic: "awtrix_demo/custom/solar power"
+        transform:
+          outputFormat: "%.0f W"
+        filter:       
+          ignore-less-than: 2.0
     icon: "ani_sun"
+    operation: "sum"
+
     color-script: |
       function get_color(v) {
-        if (v < 100) {
+        if (v < 100.0) {
           return "#FFFFFF"; // white
-        } else if (v < 250) {
+        } else if (v < 250.0) {
           return "#FFA500"; // orange
-        } else if (v < 500) {
+        } else if (v < 500.0) {
           return "#FFFF00"; // yellow
-        } else if (v < 750) {
+        } else if (v < 750.0) {
           return "#008000"; // green
         } else {
           return "#FFC0CB"; // pink
         }
       }
-    operation: sum
-    outputFormat: "%.0f W"
-    ignore:
-      lessThan: 2.0
-    topics:
-      - subscribe: "shellies/shellypro4pm-000000000000/status/switch:2"
-        transform:
-          jsonPath: "$.apower"
-          invert: true
-      - subscribe: "shellies/shellyplusplugs-000000000000/status/switch:0"
-        transform:
-          jsonPath: "$.apower"
 
-# See https://iot.hdev.io/ and https://gist.github.com/dhcgn/80bb8b748f56475922e204d5b84017e0
-http:
-  - url: https://iot.hdev.io/d/0000000000000000000000000000000000000000000000000000000/json
-    interval_sec: 60
-    transform:
-      jsonPath: "$.priceInfo.current"
-      outputFormat: "%.2f"
-    publish: "awtrix_b77810/custom/tibber price"
-    icon: "tibber"
-  - url: https://iot.hdev.io/d/0000000000000000000000000000000000000000000000000000000/plain-from-base64url/tibber_base64
-    interval_sec: 60
-    transform:
-      jsonPath: "$.data.viewer.homes[0].currentSubscription.priceInfo.current.total"
-      outputFormat: "%.4f"
-    publish: "awtrix_b77810/custom/tibber price"
+  - name: "Tibber price from http to topic tibber price"
+    source:
+      http:
+        urls:
+          - url: https://iot.hdev.io/d/00000000000000000000000000000000000000000000000000/plain-from-base64url/tibber_base64
+            transform:
+              jsonPath: "$.data.viewer.homes[0].currentSubscription.priceInfo.current.total"
+        interval_sec: 60
+    topics-to-publish:
+      - topic: "awtrix_demo/custom/tibber price"
+        transform:
+          outputFormat: "%.4f"
     icon: "tibber"
     color-script: |
       function get_color(v) {
@@ -234,6 +243,44 @@ http:
         }
       }
 
+  - name: "Tibber price from http to topic tibber price (only current price)"
+    source:
+      http:
+        urls:
+          - url: https://iot.hdev.io/d/00000000000000000000000000000000000000000000000000/plain/priceInfo/current
+        interval_sec: 60
+    topics-to-publish:
+      - topic: "awtrix_demo/custom/tibber price current"
+        transform:
+          outputFormat: "%.4f"
+    icon: "tibber"
+    color-script: |
+      function get_color(v) {
+        if (v < 0.20) {
+          return "#32a852"; // green
+        } else if (v < 0.30) {
+          return "#FFFFFF"; // white
+        } else if (v < 0.40) {
+          return "#FFFF00"; // yellow
+        } else if (v < 0.50) {
+          return "#FF0000"; // red
+        } else {
+          return "#FFC0CB"; // pink
+        }
+      }
+
+  - name: "Tibber price from http to topic tibber price"
+    source:
+      http:
+        urls:
+          - url: https://iot.hdev.io/d/00000000000000000000000000000000000000000000000000/plain-from-base64url/tibber_base64
+            transform:              
+              jsonPath: "$.data.viewer.homes[0].currentSubscription"
+        interval_sec: 60
+    topics-to-publish:
+      - topic: "awtrix_demo/custom/tibber price"
+        transform:
+          output-as-tibber-graph: true
 ```
 
 # MQTT Dispatcher

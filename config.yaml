@@ -118,3 +118,16 @@ dispatcher-entries:
           return "#FFC0CB"; // pink
         }
       }
+
+  - name: "Tibber price from http to topic tibber price"
+    source:
+      http:
+        urls:
+          - url: https://iot.hdev.io/d/00000000000000000000000000000000000000000000000000/plain-from-base64url/tibber_base64
+            transform:              
+              jsonPath: "$.data.viewer.homes[0].currentSubscription"
+        interval_sec: 60
+    topics-to-publish:
+      - topic: "awtrix_demo/custom/tibber price"
+        transform:
+          output-as-tibber-graph: true
