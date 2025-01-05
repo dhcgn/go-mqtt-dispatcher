@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"errors"
 	"go-mqtt-dispatcher/config"
+	httpsimple "go-mqtt-dispatcher/dispatcher/httpsimple"
 	"io"
 	"net/http"
 	"strings"
@@ -12,7 +13,7 @@ import (
 
 func TestRunHttp(t *testing.T) {
 	// Mock HTTP response
-	httpGet = func(url string) (resp *http.Response, err error) {
+	httpsimple.HttpGetOverrideForTesting = func(url string) (resp *http.Response, err error) {
 		if url == "http://example.com" {
 			return &http.Response{
 				StatusCode: http.StatusOK,

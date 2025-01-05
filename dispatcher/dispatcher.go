@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-mqtt-dispatcher/config"
+	httpsimple "go-mqtt-dispatcher/dispatcher/httpsimple"
 	tibberapi "go-mqtt-dispatcher/dispatcher/tibber-api"
 	tibbergraph "go-mqtt-dispatcher/tibber-graph"
 	"go-mqtt-dispatcher/utils"
-	"io"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -47,15 +46,12 @@ func (d *Dispatcher) Run() {
 		}
 
 		if entry.Source.MqttSource != nil {
-			d.log("Entry for mqtt: " + entry.Name)
 			mqttEntry := config.MqttEntryImpl{Entry: entry}
 			d.runMqtt(mqttEntry)
 		} else if entry.Source.HttpSource != nil {
-			d.log("Entry for http: " + entry.Name)
 			httpEntry := config.HttpEntryImpl{Entry: entry}
 			d.runHttp(httpEntry)
 		} else if entry.Source.TibberApiSource != nil {
-			d.log("Entry for tibber api: " + entry.Name)
 			tibberApiEntry := config.TibberApiEntryImpl{Entry: entry}
 			d.runTibberApi(tibberApiEntry)
 		}
@@ -113,7 +109,7 @@ func (d *Dispatcher) runHttp(entry config.HttpEntry) {
 			d.log("- Polling " + u + " with interval: " + tickerduration.String())
 
 			tickFunc := func(url string, entry config.HttpEntry) {
-				payload, err := getHttpPayload(url)
+				payload, err := httpsimple.GetHttpPayload(url)
 				if err != nil {
 					d.log("Error getting HTTP payload: " + err.Error())
 					return
@@ -160,30 +156,6 @@ func (d *Dispatcher) runMqtt(entry config.MqttEntry) {
 			d.log("Error subscribing to topic: " + err.Error())
 		}
 	}
-}
-
-var (
-	httpGet = func(url string) (resp *http.Response, err error) {
-		return http.Get(url)
-	}
-)
-
-func getHttpPayload(url string) ([]byte, error) {
-	resp, err := httpGet(url)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP status code: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-	return body, nil
 }
 
 type callbackConfig struct {
