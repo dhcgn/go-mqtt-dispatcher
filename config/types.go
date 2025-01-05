@@ -170,3 +170,17 @@ func (t MqttTopicDefinition) GetIgnoreLessThanConfig() (hasLessThanConfig bool, 
 
 	return true, *t.Filter.IgnoreLessThan
 }
+
+func (entry Entry) GetID() string {
+	if entry.Source.MqttSource != nil {
+		mqttEntry := MqttEntryImpl{Entry: entry}
+		return mqttEntry.GetID()
+	} else if entry.Source.HttpSource != nil {
+		httpEntry := HttpEntryImpl{Entry: entry}
+		return httpEntry.GetID()
+	} else if entry.Source.TibberApiSource != nil {
+		tibberApiEntry := TibberApiEntryImpl{Entry: entry}
+		return tibberApiEntry.GetID()
+	}
+	return ""
+}

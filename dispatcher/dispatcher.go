@@ -14,6 +14,7 @@ import (
 	"unicode"
 
 	"github.com/oliveagle/jsonpath"
+	"go.uber.org/zap"
 )
 
 type dispatcherState map[string]map[string]float64
@@ -21,19 +22,16 @@ type Dispatcher struct {
 	entries    *[]config.Entry
 	state      dispatcherState
 	mqttClient MqttClient
-	log        func(string)
+	logger     *zap.SugaredLogger
 }
 
-func NewDispatcher(entries *[]config.Entry, mqttClient MqttClient, log func(s string)) (*Dispatcher, error) {
-	if log == nil {
-		log = func(s string) {}
-	}
+func NewDispatcher(entries *[]config.Entry, mqttClient MqttClient, logger *zap.SugaredLogger) (*Dispatcher, error) {
 
 	return &Dispatcher{
 		entries:    entries,
 		state:      make(dispatcherState),
 		mqttClient: mqttClient,
-		log:        log,
+		logger:     logger,
 	}, nil
 }
 
@@ -41,19 +39,19 @@ func NewDispatcher(entries *[]config.Entry, mqttClient MqttClient, log func(s st
 func (d *Dispatcher) Run() {
 	for _, entry := range *d.entries {
 		if entry.Disabled {
-			d.log("Entry disabled: " + entry.Name)
+			d.logger.Infow("Entry disabled", "name", entry.Name, "id", entry.GetID)
 			continue
 		}
 
 		if entry.Source.MqttSource != nil {
 			mqttEntry := config.MqttEntryImpl{Entry: entry}
-			d.runMqtt(mqttEntry)
+			d.runMqtt(mqttEntry, d.logger.Named("mqtt"))
 		} else if entry.Source.HttpSource != nil {
 			httpEntry := config.HttpEntryImpl{Entry: entry}
-			d.runHttp(httpEntry)
+			d.runHttp(httpEntry, d.logger.Named("http"))
 		} else if entry.Source.TibberApiSource != nil {
 			tibberApiEntry := config.TibberApiEntryImpl{Entry: entry}
-			d.runTibberApi(tibberApiEntry)
+			d.runTibberApi(tibberApiEntry, d.logger.Named("tibber-api"))
 		}
 	}
 }
@@ -64,23 +62,23 @@ var (
 	}
 )
 
-func (d *Dispatcher) runTibberApi(entry config.TibberApiEntry) {
-	d.log("Entry for " + entry.GetTypeName() + ": " + entry.GetName() + " with ID: " + entry.GetID())
+func (d *Dispatcher) runTibberApi(entry config.TibberApiEntry, logger *zap.SugaredLogger) {
+	logger.Infow("Entry for Tibber API", "type", entry.GetTypeName(), "name", entry.GetName(), "id", entry.GetID())
 	go func(e config.TibberApiEntry) {
 		entry := e
 
 		ticker := getTicker(time.Duration(entry.GetTibberApiSource().IntervalSec) * time.Second)
 		defer ticker.Stop()
-		d.log("- Polling from tibber API with interval: " + time.Duration(entry.GetTibberApiSource().IntervalSec*int(time.Second)).String())
+		logger.Infow("Polling from Tibber API", "interval", time.Duration(entry.GetTibberApiSource().IntervalSec*int(time.Second)).String())
 
 		tickFunc := func(entry config.TibberApiEntry) {
 			payload, err := tibberapi.GetTibberAPIPayload(entry.GetTibberApiSource().TibberApiKey, entry.GetTibberApiSource().GraphqlQuery)
 			if err != nil {
-				d.log("Error getting HTTP payload: " + err.Error())
+				logger.Errorw("Error getting HTTP payload", "error", err)
 				return
 			}
 			for _, topicPub := range entry.GetTopicsToPublish() {
-				c := callbackConfig{Entry: e.GetEntry(), Id: entry.GetID(), TransSource: entry.GetTibberApiSource(), TransTarget: topicPub, Filter: topicPub}
+				c := callbackConfig{Entry: e.GetEntry(), Id: entry.GetID(), TransSource: entry.GetTibberApiSource(), TransTarget: topicPub, Filter: topicPub, Logger: logger.Named("callback")}
 				d.callback(payload, c, func(msg []byte) {
 					d.mqttClient.Publish(topicPub.Topic, msg)
 				})
@@ -99,23 +97,23 @@ func (d *Dispatcher) runTibberApi(entry config.TibberApiEntry) {
 }
 
 // runHttp creates a trigger for the http source and attaches the callback
-func (d *Dispatcher) runHttp(entry config.HttpEntry) {
-	d.log("Entry for " + entry.GetTypeName() + ": " + entry.GetName() + " with ID: " + entry.GetID())
+func (d *Dispatcher) runHttp(entry config.HttpEntry, logger *zap.SugaredLogger) {
+	logger.Infow("Entry for HTTP", "type", entry.GetTypeName(), "name", entry.GetName(), "id", entry.GetID())
 	for _, urlDef := range entry.GetSources() {
 		go func(e config.HttpEntry, u string) {
 			tickerduration := time.Duration(time.Duration(entry.GetIntervalSec()) * time.Second)
 			ticker := getTicker(tickerduration)
 			defer ticker.Stop()
-			d.log("- Polling " + u + " with interval: " + tickerduration.String())
+			logger.Infow("Polling URL", "url", u, "interval", tickerduration.String())
 
 			tickFunc := func(url string, entry config.HttpEntry) {
 				payload, err := httpsimple.GetHttpPayload(url)
 				if err != nil {
-					d.log("Error getting HTTP payload: " + err.Error())
+					logger.Errorw("Error getting HTTP payload", "error", err)
 					return
 				}
 				for _, topicPub := range entry.GetTopicsToPublish() {
-					c := callbackConfig{Entry: entry.GetEntry(), Id: url, TransSource: urlDef, TransTarget: topicPub, Filter: topicPub}
+					c := callbackConfig{Entry: entry.GetEntry(), Id: url, TransSource: urlDef, TransTarget: topicPub, Filter: topicPub, Logger: logger.Named("callback")}
 					d.callback(payload, c, func(msg []byte) {
 						d.mqttClient.Publish(topicPub.Topic, msg)
 					})
@@ -139,21 +137,21 @@ var (
 )
 
 // runMqtt creates a trigger for the mqtt source and attaches the callback
-func (d *Dispatcher) runMqtt(entry config.MqttEntry) {
-	d.log("Entry for " + entry.GetTypeName() + ": " + entry.GetName() + " with ID: " + entry.GetID())
+func (d *Dispatcher) runMqtt(entry config.MqttEntry, logger *zap.SugaredLogger) {
+	logger.Infow("Entry for MQTT", "type", entry.GetTypeName(), "name", entry.GetName(), "id", entry.GetID())
 	for _, topicSub := range entry.GetTopicsToSubscribe() {
-		d.log("- Subscribing to " + topicSub.Topic)
+		logger.Infow("Subscribing to topic", "topic", topicSub.Topic)
 		err := d.mqttClient.Subscribe(topicSub.Topic, func(payload []byte) {
-			d.log("Received payload for " + topicSub.Topic)
+			logger.Infow("Received payload for topic", "topic", topicSub.Topic)
 			for _, topicPub := range entry.GetTopicsToPublish() {
-				c := callbackConfig{Entry: entry.GetEntry(), Id: topicSub.Topic, TransSource: topicSub, TransTarget: topicPub, Filter: topicPub}
+				c := callbackConfig{Entry: entry.GetEntry(), Id: topicSub.Topic, TransSource: topicSub, TransTarget: topicPub, Filter: topicPub, Logger: logger.Named("callback")}
 				d.callback(payload, c, func(msg []byte) {
 					d.mqttClient.Publish(topicPub.Topic, msg)
 				})
 			}
 		})
 		if err != nil {
-			d.log("Error subscribing to topic: " + err.Error())
+			logger.Errorw("Error subscribing to topic", "error", err)
 		}
 	}
 }
@@ -164,6 +162,7 @@ type callbackConfig struct {
 	TransSource config.TransformSource
 	TransTarget config.TransformTarget
 	Filter      config.Filter
+	Logger      *zap.SugaredLogger // Add this field
 }
 
 var errorPayload = []byte(`{"text": "ERR"}`)
@@ -175,16 +174,16 @@ func (d *Dispatcher) getOutputAsTibberGraph(payload []byte, c config.TransformSo
 	t := time.Now()
 	g, err := tibbergraph.CreateDraw(string(payload), t)
 	if err != nil {
-		d.log("Error creating graph: " + err.Error())
+		d.logger.Errorw("Error creating graph", "error", err)
 		return nil, err
 	}
 	j, err := g.GetJson()
 	if err != nil {
-		d.log("Error getting json: " + err.Error())
+		d.logger.Errorw("Error getting JSON", "error", err)
 		return nil, err
 	}
 
-	d.log("Generated TibberGraph with " + strconv.Itoa(len(g.Draw)) + " rows and with time: " + t.String())
+	d.logger.Infow("Generated TibberGraph", "rows", len(g.Draw), "time", t.String())
 
 	return []byte(j), nil
 }
@@ -194,7 +193,7 @@ func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]b
 	if c.TransTarget != nil && c.TransTarget.GetOutputAsTibberGraph() {
 		p, err := d.getOutputAsTibberGraph(payload, c.TransSource)
 		if err != nil {
-			d.log("Error getting TibberGraph: " + err.Error())
+			c.Logger.Errorw("Error getting TibberGraph", "error", err)
 			publish(errorPayload)
 			return
 		}
@@ -204,7 +203,7 @@ func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]b
 
 	val, err := d.transformPayload(payload, c.TransSource)
 	if err != nil {
-		d.log("transform error: " + err.Error())
+		c.Logger.Errorw("Transform error", "error", err)
 		return
 	}
 
@@ -221,9 +220,9 @@ func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]b
 				sum += v
 			}
 			val = sum
-			d.log(fmt.Sprintf("Accumulated value for %s: %f, from %v values ", c.Entry.Name, val, len(d.state[c.Entry.Name])))
+			c.Logger.Infow("Accumulated value", "entry", c.Entry.Name, "value", val, "count", len(d.state[c.Entry.Name]))
 		} else {
-			d.log(fmt.Sprintf("Operation '%s' not supported", op))
+			c.Logger.Warnw("Operation not supported", "operation", op)
 		}
 	}
 
@@ -246,8 +245,10 @@ func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]b
 
 	// Add Color
 	if c.Entry.ColorScriptCallback != nil {
-		if c, err := c.Entry.ColorScriptCallback(val); err == nil {
-			pubMsg.Color = c
+		if color, err := c.Entry.ColorScriptCallback(val); err == nil {
+			pubMsg.Color = color
+		} else {
+			c.Logger.Errorw("Error getting color", "error", err)
 		}
 	}
 
@@ -258,7 +259,7 @@ func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]b
 
 	jsonData, err := json.Marshal(pubMsg)
 	if err != nil {
-		d.log(fmt.Sprintf("Error marshaling json: %v", err))
+		c.Logger.Errorw("Error marshaling JSON", "error", err)
 		publish(errorPayload)
 	}
 
@@ -293,13 +294,13 @@ func (d *Dispatcher) transformPayload(payload []byte, t config.TransformSource) 
 		var res interface{}
 		res, err = jsonpath.JsonPathLookup(json_data, jsonPath)
 		if err != nil {
-			d.log(fmt.Sprintf("transformPayload JsonPath error: %v input: %s jsonPath: %s", err, string(payload), jsonPath))
+			d.logger.Errorw("JsonPath error", "error", err, "input", string(payload), "jsonPath", jsonPath)
 			return 0, err
 		}
 
 		result, err = strconv.ParseFloat(fmt.Sprintf("%v", res), 64)
 		if err != nil {
-			d.log(fmt.Sprintf("transformPayload ParseError: %v input: %s jsonPath: %s", err, string(payload), jsonPath))
+			d.logger.Errorw("Parse error", "error", err, "input", string(payload), "jsonPath", jsonPath)
 			return 0, err
 		}
 	}

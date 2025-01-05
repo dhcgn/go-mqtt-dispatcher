@@ -12,7 +12,8 @@
             "program": "${workspaceFolder}/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/secrets/config.prodution.demo.yaml"
+                "${workspaceFolder}/secrets/config.prodution.demo.yaml",
+                "-debug"
             ]
         },
         {
@@ -23,7 +24,8 @@
             "program": "${workspaceFolder}/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/secrets/config.prodution.yaml"
+                "${workspaceFolder}/secrets/config.prodution.yaml",
+                "-debug"
             ]
         }
     ]

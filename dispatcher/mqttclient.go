@@ -2,9 +2,9 @@ package dispatcher
 
 import (
 	"bytes"
-	"log"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"go.uber.org/zap"
 )
 
 type MqttClient interface {
@@ -14,24 +14,26 @@ type MqttClient interface {
 
 type PahoMqttClient struct {
 	client mqtt.Client
+	logger *zap.SugaredLogger
 }
 
-func NewPahoMqttClient(client mqtt.Client) *PahoMqttClient {
-	return &PahoMqttClient{client: client}
+func NewPahoMqttClient(client mqtt.Client, logger *zap.SugaredLogger) *PahoMqttClient {
+	return &PahoMqttClient{client: client, logger: logger}
 }
 
 func (c *PahoMqttClient) Publish(topic string, payload []byte) error {
-	log.Printf("Publishing to '%s': '%s'\n", topic, shortenPayload(payload))
+	c.logger.Infow("Publish", "topic", topic, "payload", shortenPayload(payload))
 	token := c.client.Publish(topic, 0, true, payload)
 	token.Wait()
 	err := token.Error()
 	if err != nil {
-		log.Printf("Error publishing message: %v", err)
+		c.logger.Infof("Error publishing message: %v", err)
 	}
 	return err
 }
 
 func (c *PahoMqttClient) Subscribe(topic string, callback func([]byte)) error {
+	c.logger.Infow("Subscribing to", "topic", topic)
 	handler := func(client mqtt.Client, msg mqtt.Message) {
 		callback(msg.Payload())
 	}

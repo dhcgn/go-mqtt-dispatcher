@@ -9,7 +9,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 )
+
+// Add this helper function at the start of the file
+func newTestLogger(t *testing.T) *zap.SugaredLogger {
+	logger := zaptest.NewLogger(t)
+	return logger.Sugar()
+}
 
 func TestRunHttp(t *testing.T) {
 	// Mock HTTP response
@@ -39,12 +48,10 @@ func TestRunHttp(t *testing.T) {
 		},
 	}
 
-	mqttClient := NewMockMqttClient()
-	log := func(s string) {
-		t.Log(s)
-	}
+	logger := newTestLogger(t)
+	mqttClient := NewMockMqttClient(logger.Named("mqtt"))
 
-	dispatcher, err := NewDispatcher(&[]config.Entry{entry}, mqttClient, log)
+	dispatcher, err := NewDispatcher(&[]config.Entry{entry}, mqttClient, logger)
 	if err != nil {
 		t.Fatalf("Failed to create dispatcher: %v", err)
 	}
@@ -55,7 +62,7 @@ func TestRunHttp(t *testing.T) {
 		return time.NewTicker(1 * time.Millisecond)
 	}
 	httpEntry := config.HttpEntryImpl{Entry: entry}
-	go dispatcher.runHttp(httpEntry)
+	go dispatcher.runHttp(httpEntry, logger.Named("http"))
 
 	// Wait for the ticker to tick
 	time.Sleep(10 * time.Millisecond)
@@ -87,20 +94,17 @@ func TestRunMqtt(t *testing.T) {
 		},
 	}
 
-	log := func(s string) {
-		t.Log(s)
-	}
+	logger := newTestLogger(t)
+	mqttClient := NewMockMqttClient(logger.Named("mqtt"))
 
-	mqttClient := NewMockMqttClient(log)
-
-	dispatcher, err := NewDispatcher(&[]config.Entry{entry}, mqttClient, log)
+	dispatcher, err := NewDispatcher(&[]config.Entry{entry}, mqttClient, logger)
 	if err != nil {
 		t.Fatalf("Failed to create dispatcher: %v", err)
 	}
 
 	// Run the dispatcher
 	mqttEntry := config.MqttEntryImpl{Entry: entry}
-	dispatcher.runMqtt(mqttEntry)
+	dispatcher.runMqtt(mqttEntry, logger.Named("mqtt"))
 
 	// Check if the subscription was made
 	if !mqttClient.IsSubscribed("test/subscribe") {
@@ -216,13 +220,10 @@ func TestCallback(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log := func(s string) {
-				t.Log(s)
-			}
+			logger := newTestLogger(t)
+			mqttClient := NewMockMqttClient(logger.Named("mqtt"))
 
-			mqttClient := NewMockMqttClient(log)
-
-			dispatcher, err := NewDispatcher(&[]config.Entry{tt.entry}, mqttClient, log)
+			dispatcher, err := NewDispatcher(&[]config.Entry{tt.entry}, mqttClient, logger)
 			if err != nil {
 				t.Fatalf("Failed to create dispatcher: %v", err)
 			}
@@ -230,6 +231,9 @@ func TestCallback(t *testing.T) {
 			if tt.changeState != nil {
 				tt.changeState(dispatcher.state)
 			}
+
+			// Update callback config to include logger
+			tt.config.Logger = logger.Named("callback")
 
 			// Simulate receiving a message
 			dispatcher.callback(tt.payload, tt.config, func(msg []byte) {
