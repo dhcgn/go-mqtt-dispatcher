@@ -51,7 +51,7 @@ func TestRunHttp(t *testing.T) {
 
 	// Run the dispatcher
 	interruptRunHttpTickerAfterTick = true
-	getTicker = func(d time.Duration) *time.Ticker {
+	getTicker = func(_ time.Duration) *time.Ticker {
 		return time.NewTicker(1 * time.Millisecond)
 	}
 	httpEntry := config.HttpEntryImpl{Entry: entry}
