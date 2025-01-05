@@ -247,6 +247,7 @@ dispatcher-entries:
       }
 
   - name: "Tibber price from http to topic tibber price"
+    diabled: true
     source:
       http:
         urls:
@@ -275,6 +276,7 @@ dispatcher-entries:
       }
 
   - name: "Tibber price from http to topic tibber price (only current price)"
+    diabled: true
     source:
       http:
         urls:
@@ -301,6 +303,7 @@ dispatcher-entries:
       }
 
   - name: "Tibber price from http to topic tibber price"
+    diabled: true
     source:
       http:
         urls:
@@ -312,6 +315,94 @@ dispatcher-entries:
       - topic: "awtrix_demo/custom/tibber price graph"
         transform:
           output-as-tibber-graph: true
+
+  - name: "Tibber price as graph with Tibber API"
+    disabled: false
+    source:
+      tibber-api:
+        tibber-api-key: MY_TIBBER_API_KEY
+        graphql-query: |
+          {
+            viewer {
+              homes {
+                currentSubscription {
+                  priceInfo {
+                    current {
+                      total
+                      energy
+                      tax
+                      startsAt
+                    }
+                    today {
+                      total
+                      energy
+                      tax
+                      startsAt
+                    }
+                    tomorrow {
+                      total
+                      energy
+                      tax
+                      startsAt
+                    }
+                  }
+                }
+              }
+            }
+          }
+        interval_sec: 60
+        transform:              
+          jsonPath: "$.data.viewer.homes[0].currentSubscription"
+    topics-to-publish:
+      - topic: "awtrix_demo/custom/tibber price"
+        transform:
+          output-as-tibber-graph: true
+
+
+  - name: "Tibber price with Tibber API"
+    disabled: false
+    source:
+      tibber-api:
+        tibber-api-key: MY_TIBBER_API_KEY
+        graphql-query: |
+          {
+            viewer {
+              homes {
+                currentSubscription {
+                  priceInfo {
+                    current {
+                      total
+                      energy
+                      tax
+                      startsAt
+                    }
+                  }
+                }
+              }
+            }
+          }
+        interval_sec: 60
+        transform:              
+          jsonPath: "$.data.viewer.homes[0].currentSubscription.priceInfo.current.total"
+    topics-to-publish:
+      - topic: "awtrix_demo/custom/tibber price"
+        transform:
+          outputFormat: "%.4f"
+    icon: "tibber"
+    color-script: |
+      function get_color(v) {
+        if (v < 0.20) {
+          return "#32a852"; // green
+        } else if (v < 0.30) {
+          return "#FFFFFF"; // white
+        } else if (v < 0.40) {
+          return "#FFFF00"; // yellow
+        } else if (v < 0.50) {
+          return "#FF0000"; // red
+        } else {
+          return "#FFC0CB"; // pink
+        }
+      }
 ```
 
 # MQTT Dispatcher

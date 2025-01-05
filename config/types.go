@@ -20,6 +20,7 @@ type MqttConfig struct {
 
 type Entry struct {
 	Name            string                `yaml:"name"`
+	Disabled        bool                  `yaml:"disabled,omitempty"`
 	TopicsToPublish []MqttTopicDefinition `yaml:"topics-to-publish,omitempty"`
 	Icon            string                `yaml:"icon,omitempty"`
 	ColorScript     string                `yaml:"color-script,omitempty"`
@@ -48,8 +49,9 @@ type FilterDefinition struct {
 }
 
 type EntrySource struct {
-	MqttSource *MqttSource `yaml:"mqtt,omitempty"`
-	HttpSource *HttpSource `yaml:"http,omitempty"`
+	MqttSource      *MqttSource      `yaml:"mqtt,omitempty"`
+	HttpSource      *HttpSource      `yaml:"http,omitempty"`
+	TibberApiSource *TibberApiSource `yaml:"tibber-api,omitempty"`
 }
 
 type MqttSource struct {
@@ -64,6 +66,13 @@ type HttpSource struct {
 type HttpUrlDefinition struct {
 	Url       string              `yaml:"url"`
 	Transform TransformDefinition `yaml:"transform"`
+}
+
+type TibberApiSource struct {
+	TibberApiKey string              `yaml:"tibber-api-key"`
+	GraphqlQuery string              `yaml:"graphql-query"`
+	IntervalSec  int                 `yaml:"interval_sec"`
+	Transform    TransformDefinition `yaml:"transform"`
 }
 
 type TransformTarget interface {
@@ -119,6 +128,14 @@ func (h HttpUrlDefinition) GetJsonPath() string {
 
 func (h HttpUrlDefinition) GetInvert() bool {
 	return h.Transform.Invert
+}
+
+func (t TibberApiSource) GetJsonPath() string {
+	return t.Transform.JsonPath
+}
+
+func (t TibberApiSource) GetInvert() bool {
+	return t.Transform.Invert
 }
 
 type operator string
