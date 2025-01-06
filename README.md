@@ -44,23 +44,23 @@ Docker image available for easy deployment.
 
 ### Product
 
-![Product demonstration](/README.md_assets/product.jpg)
+![Product demonstration](README.md_assets/product.jpg)
 
 ### Wattage of the house
 
-![House wattage display](/README.md_assets/house.jpeg)
+![House wattage display](README.md_assets/house.jpeg)
 
 ### Solar power
 
-![Solar power display](/README.md_assets/solar.jpeg)
+![Solar power display](README.md_assets/solar.jpeg)
 
 ### Tibber price (price per kWh in this hour)
 
-![Tibber price display](/README.md_assets/tibber_price.jpeg)
+![Tibber price display](README.md_assets/tibber_price.jpeg)
 
 ### Tibber price graph
 
-![Tibber price graph display](/README.md_assets/tibber_price_graph.jpeg)
+![Tibber price graph display](README.md_assets/tibber_price_graph.jpeg)
 
 Legende:
 
