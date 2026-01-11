@@ -16,14 +16,14 @@ jobs:
           { os: 'windows', arch: 'amd64', suffix: '.exe' }
         ]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0  # Fetch all history and tags
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v6
       with:
-        go-version: '1.23'
+        go-version: '1.25'
 
     - name: Build ${{ matrix.target.os }}
       env:
@@ -44,7 +44,7 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v6
       with:
         name: binaries-${{ matrix.target.os }}-${{ matrix.target.arch }}
         path: go-mqtt-dispatcher-${{ matrix.target.os }}-${{ matrix.target.arch }}${{ matrix.target.suffix }}
