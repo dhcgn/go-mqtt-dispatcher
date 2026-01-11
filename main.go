@@ -50,7 +50,10 @@ func main() {
 	}
 
 	// Create MQTT client
-	client := connect(AppName+Version+Commit+BuildTime, config.Mqtt.BrokerAsUri)
+	client, err := connect(AppName+Version+Commit+BuildTime, config.Mqtt.BrokerAsUri, config.Mqtt.Username, config.Mqtt.Password)
+	if err != nil {
+		log.Fatalf("Failed to connect to MQTT broker: %v", err)
+	}
 	mqttClient := dispatcher.NewPahoMqttClient(client)
 
 	d, err := dispatcher.NewDispatcher(&config.DispatcherEntries, mqttClient, func(s string) { log.Println("Disp: " + s) })
@@ -62,12 +65,17 @@ func main() {
 	select {}
 }
 
-func connect(clientId string, uri *url.URL) mqtt.Client {
+func connect(clientId string, uri *url.URL, username, password string) (mqtt.Client, error) {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s", uri.Host))
-	// opts.SetUsername(uri.User.Username())
-	// password, _ := uri.User.Password()
-	// opts.SetPassword(password)
+	if username != "" {
+		opts.SetUsername(username)
+
+	}
+	if password != "" {
+		opts.SetPassword(password)
+	}
+
 	opts.SetClientID(clientId)
 
 	client := mqtt.NewClient(opts)
@@ -75,7 +83,7 @@ func connect(clientId string, uri *url.URL) mqtt.Client {
 	for !token.WaitTimeout(3 * time.Second) {
 	}
 	if err := token.Error(); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	return client
+	return client, nil
 }
