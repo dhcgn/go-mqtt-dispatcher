@@ -50,7 +50,7 @@ func TestRunHttp(t *testing.T) {
 	}
 
 	// Run the dispatcher
-	interruptRunHttpTickerAfterTick = true
+	interruptRunHttpTickerAfterTick.Store(true)
 	getTicker = func(_ time.Duration) *time.Ticker {
 		return time.NewTicker(1 * time.Millisecond)
 	}
@@ -61,7 +61,7 @@ func TestRunHttp(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Check if the message was published
-	if msg, ok := mqttClient.PublishedMessages["test/topic"]; !ok {
+	if msg, ok := mqttClient.GetPublishedMessage("test/topic"); !ok {
 		t.Errorf("Expected message to be published to test/topic")
 	} else {
 		expectedMsg := `{"text":"42"}`
@@ -112,7 +112,7 @@ func TestRunMqtt(t *testing.T) {
 	mqttClient.SimulateMessage("test/subscribe", payload)
 
 	// Check if the message was published
-	if msg, ok := mqttClient.PublishedMessages["test/publish"]; !ok {
+	if msg, ok := mqttClient.GetPublishedMessage("test/publish"); !ok {
 		t.Errorf("Expected message to be published to test/publish")
 	} else {
 		if string(msg) != `{"text":"42"}` {
@@ -237,7 +237,7 @@ func TestCallback(t *testing.T) {
 			})
 
 			// Check if the message was published
-			if msg, ok := mqttClient.PublishedMessages["test/publish"]; !ok {
+			if msg, ok := mqttClient.GetPublishedMessage("test/publish"); !ok {
 				t.Errorf("Expected message to be published to test/publish")
 			} else {
 				if string(msg) != tt.expected {
