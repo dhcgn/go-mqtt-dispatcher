@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v2"
 )
@@ -43,6 +44,36 @@ func LoadConfig(path string) (*RootConfig, error) {
 				return nil, fmt.Errorf("ERROR CREATING COLOR CALLBACK FOR CONFIG %d: %v", e_i, err)
 			}
 			cfg.DispatcherEntries[e_i].ColorScriptCallback = colorCallback
+		}
+	}
+
+	for e_i, e := range cfg.DispatcherEntries {
+		if e.Fallback == nil {
+			continue
+		}
+		fb := e.Fallback
+
+		switch fallbackMode(fb.Mode) {
+		case FallbackModeNone, FallbackModeNoValueRead, FallbackModeNoValueChange, "":
+		default:
+			return nil, fmt.Errorf("ERROR: INVALID FALLBACK MODE INDEX %d: '%s'", e_i, fb.Mode)
+		}
+
+		if fb.Mode == "" || fallbackMode(fb.Mode) == FallbackModeNone {
+			continue
+		}
+
+		dur, err := time.ParseDuration(fb.After)
+		if err != nil {
+			return nil, fmt.Errorf("ERROR PARSING FALLBACK DURATION INDEX %d: %v", e_i, err)
+		}
+		if dur <= 0 {
+			return nil, fmt.Errorf("ERROR: FALLBACK DURATION MUST BE POSITIVE INDEX %d: '%s'", e_i, fb.After)
+		}
+		cfg.DispatcherEntries[e_i].FallbackAfter = dur
+
+		if !isValidHexColor(fb.Color) {
+			return nil, fmt.Errorf("ERROR: INVALID FALLBACK COLOR INDEX %d: '%s'", e_i, fb.Color)
 		}
 	}
 

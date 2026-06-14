@@ -15,6 +15,11 @@ const (
 	errorInvalidHex    = "INVALID HEX CODE"
 )
 
+// isValidHexColor reports whether s is a 7-character hex color like "#RRGGBB".
+func isValidHexColor(s string) bool {
+	return len(s) == 7 && s[0] == '#'
+}
+
 func createColorCallback(script string) (func(float64) (string, error), error) {
 	if script == "" {
 		return nil, errors.New(errorEmptyScript)
@@ -36,7 +41,7 @@ func createColorCallback(script string) (func(float64) (string, error), error) {
 	}
 
 	hexcode := res.String()
-	if len(hexcode) != 7 || hexcode[0] != '#' {
+	if !isValidHexColor(hexcode) {
 		return nil, errors.New(errorInvalidHex)
 	}
 

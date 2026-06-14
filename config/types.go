@@ -2,7 +2,10 @@
 // TODO: Update docs for new config!
 package config
 
-import "net/url"
+import (
+	"net/url"
+	"time"
+)
 
 type RootConfig struct {
 	Mqtt              MqttConfig `yaml:"mqtt"`
@@ -26,9 +29,11 @@ type Entry struct {
 	ColorScript     string                `yaml:"color-script,omitempty"`
 	Operation       string                `yaml:"operation,omitempty"`
 	Source          EntrySource           `yaml:"source,omitempty"`
+	Fallback        *FallbackDefinition   `yaml:"fallback,omitempty"`
 
 	// Late binding
 	ColorScriptCallback func(float64) (string, error)
+	FallbackAfter       time.Duration
 }
 
 type MqttTopicDefinition struct {
@@ -46,6 +51,13 @@ type TransformDefinition struct {
 
 type FilterDefinition struct {
 	IgnoreLessThan *float64 `yaml:"ignore-less-than,omitempty"`
+}
+
+type FallbackDefinition struct {
+	Mode  string `yaml:"mode"`
+	After string `yaml:"after"`
+	Value string `yaml:"value"`
+	Color string `yaml:"color"`
 }
 
 type EntrySource struct {
@@ -144,6 +156,29 @@ const (
 	OperatorNone operator = ""
 	OperatorSum  operator = "sum"
 )
+
+type fallbackMode string
+
+const (
+	FallbackModeNone          fallbackMode = "none"
+	FallbackModeNoValueRead   fallbackMode = "no-value-read"
+	FallbackModeNoValueChange fallbackMode = "no-value-change"
+)
+
+// HasFallback reports whether the entry has an enabled stale-value fallback.
+func (e Entry) HasFallback() bool {
+	return e.Fallback != nil &&
+		e.Fallback.Mode != "" &&
+		fallbackMode(e.Fallback.Mode) != FallbackModeNone
+}
+
+// FallbackMode returns the parsed fallback mode (FallbackModeNone if disabled).
+func (e Entry) FallbackMode() fallbackMode {
+	if e.Fallback == nil {
+		return FallbackModeNone
+	}
+	return fallbackMode(e.Fallback.Mode)
+}
 
 func (e Entry) MustAccumulate() (bool, operator) {
 	if e.Source.HttpSource != nil {
