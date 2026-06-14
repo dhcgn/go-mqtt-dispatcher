@@ -20,6 +20,12 @@ func useTestClock(base time.Time) {
 
 func setClock(t time.Time) { fbClock.Store(t.UnixNano()) }
 
+// lastMessage returns the last payload published to a topic as a string.
+func lastMessage(mc *MockMqttClient, topic string) string {
+	msg, _ := mc.GetPublishedMessage(topic)
+	return string(msg)
+}
+
 // fallbackPayloadJSON is the expected payload for the test entries below.
 const fallbackPayloadJSON = `{"text":"? °C","icon":"pool","color":"#888888"}`
 
@@ -68,18 +74,18 @@ func TestFallbackNoValueReadFires(t *testing.T) {
 
 	// Not yet stale.
 	d.fireFallbacksIfStale(entry)
-	assert.Equal(t, 0, mc.PublishCount["display/temp"])
+	assert.Equal(t, 0, mc.GetPublishCount("display/temp"))
 
 	// Past the timeout with no data -> fires once.
 	setClock(base.Add(2 * time.Hour))
 	d.fireFallbacksIfStale(entry)
-	assert.Equal(t, 1, mc.PublishCount["display/temp"])
-	assert.Equal(t, fallbackPayloadJSON, string(mc.PublishedMessages["display/temp"]))
+	assert.Equal(t, 1, mc.GetPublishCount("display/temp"))
+	assert.Equal(t, fallbackPayloadJSON, lastMessage(mc, "display/temp"))
 
 	// Fire-once: subsequent checks do not republish.
 	d.fireFallbacksIfStale(entry)
 	d.fireFallbacksIfStale(entry)
-	assert.Equal(t, 1, mc.PublishCount["display/temp"])
+	assert.Equal(t, 1, mc.GetPublishCount("display/temp"))
 }
 
 func TestFallbackNoValueReadResetByMessage(t *testing.T) {
@@ -95,15 +101,15 @@ func TestFallbackNoValueReadResetByMessage(t *testing.T) {
 
 	// 1h after startup but only 31m after the message -> not stale.
 	setClock(base.Add(1*time.Hour + 1*time.Minute))
-	before := mc.PublishCount["display/temp"]
+	before := mc.GetPublishCount("display/temp")
 	d.fireFallbacksIfStale(entry)
-	assert.Equal(t, before, mc.PublishCount["display/temp"])
+	assert.Equal(t, before, mc.GetPublishCount("display/temp"))
 
 	// Past 1h after the message -> fires.
 	setClock(base.Add(1*time.Hour + 31*time.Minute))
 	d.fireFallbacksIfStale(entry)
-	assert.Equal(t, before+1, mc.PublishCount["display/temp"])
-	assert.Equal(t, fallbackPayloadJSON, string(mc.PublishedMessages["display/temp"]))
+	assert.Equal(t, before+1, mc.GetPublishCount("display/temp"))
+	assert.Equal(t, fallbackPayloadJSON, lastMessage(mc, "display/temp"))
 }
 
 func TestFallbackNoValueChangeFires(t *testing.T) {
@@ -116,17 +122,17 @@ func TestFallbackNoValueChangeFires(t *testing.T) {
 	// Before any value, change-mode must not fire even past the timeout.
 	setClock(base.Add(2 * time.Hour))
 	d.fireFallbacksIfStale(entry)
-	assert.Equal(t, 0, mc.PublishCount["display/temp"])
+	assert.Equal(t, 0, mc.GetPublishCount("display/temp"))
 
 	// First value seen.
 	mc.SimulateMessage("sensor/temp", []byte(`{"t":42}`))
-	before := mc.PublishCount["display/temp"]
+	before := mc.GetPublishCount("display/temp")
 
 	// Same value, well past the timeout -> fires.
 	setClock(base.Add(4 * time.Hour))
 	d.fireFallbacksIfStale(entry)
-	assert.Equal(t, before+1, mc.PublishCount["display/temp"])
-	assert.Equal(t, fallbackPayloadJSON, string(mc.PublishedMessages["display/temp"]))
+	assert.Equal(t, before+1, mc.GetPublishCount("display/temp"))
+	assert.Equal(t, fallbackPayloadJSON, lastMessage(mc, "display/temp"))
 }
 
 func TestFallbackNoValueChangeResetByChange(t *testing.T) {
@@ -141,17 +147,17 @@ func TestFallbackNoValueChangeResetByChange(t *testing.T) {
 	// A changed value before the timeout resets the change clock.
 	setClock(base.Add(50 * time.Minute))
 	mc.SimulateMessage("sensor/temp", []byte(`{"t":43}`))
-	before := mc.PublishCount["display/temp"]
+	before := mc.GetPublishCount("display/temp")
 
 	// Only 30m since the change -> not stale.
 	setClock(base.Add(1*time.Hour + 20*time.Minute))
 	d.fireFallbacksIfStale(entry)
-	assert.Equal(t, before, mc.PublishCount["display/temp"])
+	assert.Equal(t, before, mc.GetPublishCount("display/temp"))
 
 	// Past 1h since the change -> fires.
 	setClock(base.Add(1*time.Hour + 51*time.Minute))
 	d.fireFallbacksIfStale(entry)
-	assert.Equal(t, before+1, mc.PublishCount["display/temp"])
+	assert.Equal(t, before+1, mc.GetPublishCount("display/temp"))
 }
 
 func TestFallbackDisabled(t *testing.T) {
@@ -176,7 +182,7 @@ func TestFallbackDisabled(t *testing.T) {
 	// No tracking was seeded; a stale check never publishes a fallback.
 	setClock(base.Add(100 * time.Hour))
 	d.fireFallbacksIfStale(entry)
-	_, ok := mc.PublishedMessages["display/temp"]
+	_, ok := mc.GetPublishedMessage("display/temp")
 	assert.False(t, ok)
 	assert.Empty(t, d.fallbacks)
 }
@@ -191,8 +197,8 @@ func TestFallbackMultipleTopics(t *testing.T) {
 	setClock(base.Add(2 * time.Hour))
 	d.fireFallbacksIfStale(entry)
 
-	assert.Equal(t, 1, mc.PublishCount["display/a"])
-	assert.Equal(t, 1, mc.PublishCount["display/b"])
-	assert.Equal(t, fallbackPayloadJSON, string(mc.PublishedMessages["display/a"]))
-	assert.Equal(t, fallbackPayloadJSON, string(mc.PublishedMessages["display/b"]))
+	assert.Equal(t, 1, mc.GetPublishCount("display/a"))
+	assert.Equal(t, 1, mc.GetPublishCount("display/b"))
+	assert.Equal(t, fallbackPayloadJSON, lastMessage(mc, "display/a"))
+	assert.Equal(t, fallbackPayloadJSON, lastMessage(mc, "display/b"))
 }

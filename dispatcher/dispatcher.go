@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -39,8 +40,8 @@ type Dispatcher struct {
 	mqttClient MqttClient
 	log        func(string)
 
-	// mu protects fallbacks only. The pre-existing `state` map is intentionally
-	// left unsynchronized (unchanged behavior).
+	// mu guards the shared maps below (state and fallbacks), which are accessed
+	// concurrently by the per-source goroutines and the fallback watchdog.
 	mu        sync.Mutex
 	fallbacks map[string]*fallbackTrack // key = fallbackKey(entry.Name, pubTopic)
 }
@@ -120,7 +121,7 @@ func (d *Dispatcher) runTibberApi(entry config.TibberApiEntry) {
 		tickFunc(entry) // First tick
 		for range ticker.C {
 			tickFunc(entry)
-			if interruptRunHttpTickerAfterTick {
+			if interruptRunHttpTickerAfterTick.Load() {
 				return
 			}
 		}
@@ -155,7 +156,7 @@ func (d *Dispatcher) runHttp(entry config.HttpEntry) {
 			tickFunc(u, e) // First tick
 			for range ticker.C {
 				tickFunc(u, e)
-				if interruptRunHttpTickerAfterTick {
+				if interruptRunHttpTickerAfterTick.Load() {
 					return
 				}
 			}
@@ -164,9 +165,10 @@ func (d *Dispatcher) runHttp(entry config.HttpEntry) {
 	}
 }
 
-var (
-	interruptRunHttpTickerAfterTick = false
-)
+// interruptRunHttpTickerAfterTick lets tests stop the ticker loops after one
+// tick. It is atomic because background goroutines may still read it while a
+// subsequent test writes it (e.g. under `go test -count`).
+var interruptRunHttpTickerAfterTick atomic.Bool
 
 // runMqtt creates a trigger for the mqtt source and attaches the callback
 func (d *Dispatcher) runMqtt(entry config.MqttEntry) {
@@ -245,8 +247,10 @@ func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]b
 		return
 	}
 
-	// Accumulate
+	// Accumulate. d.state is shared across the per-source goroutines (HTTP
+	// pollers, tibber poller, MQTT callbacks), so guard it with d.mu.
 	if must, op := c.Entry.MustAccumulate(); must {
+		d.mu.Lock()
 		if _, ok := d.state[c.Entry.Name]; !ok {
 			d.state[c.Entry.Name] = make(map[string]float64)
 		}
@@ -258,8 +262,11 @@ func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]b
 				sum += v
 			}
 			val = sum
-			d.log(fmt.Sprintf("Accumulated value for %s: %f, from %v values ", c.Entry.Name, val, len(d.state[c.Entry.Name])))
+			count := len(d.state[c.Entry.Name])
+			d.mu.Unlock()
+			d.log(fmt.Sprintf("Accumulated value for %s: %f, from %v values ", c.Entry.Name, val, count))
 		} else {
+			d.mu.Unlock()
 			d.log(fmt.Sprintf("Operation '%s' not supported", op))
 		}
 	}
@@ -466,7 +473,7 @@ func (d *Dispatcher) startFallbackWatchdog(entry config.Entry) {
 		d.fireFallbacksIfStale(entry)
 		for range ticker.C {
 			d.fireFallbacksIfStale(entry)
-			if interruptRunHttpTickerAfterTick {
+			if interruptRunHttpTickerAfterTick.Load() {
 				return
 			}
 		}
