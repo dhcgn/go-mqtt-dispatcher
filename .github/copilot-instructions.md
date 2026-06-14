@@ -4,6 +4,15 @@
 - Notable packages: 
   - [github.com/eclipse-paho/paho.mqtt.golang](https://github.com/eclipse-paho/paho.mqtt.golang)
 
+#### Working in this repo (non-obvious conventions)
+
+- **Testing seam = package-level vars, not DI.** Tests override globals instead of injecting: `getTicker` and `now` in `dispatcher`, `osReadFile` in `config`, and `interruptRunHttpTickerAfterTick` (an `atomic.Bool`) to stop ticker loops after one tick. Because these are shared globals, tests must run sequentially — do **not** add `t.Parallel()`.
+- **Concurrency.** Each source runs its own goroutine (one per HTTP URL, one tibber poller, MQTT callbacks) and they all call `Dispatcher.callback()` concurrently. Any shared dispatcher map (`state`, `fallbacks`) must be guarded by `d.mu`. `MockMqttClient` is mutex-guarded too — read results via `GetPublishedMessage`/`GetPublishCount`, never the maps directly. Run `go test -race ./...` before merging anything touching the dispatcher.
+- **Config uses eager "late binding".** `config.LoadConfig` parses raw YAML strings into runtime fields and validates up front (fail fast): e.g. `ColorScript`→`ColorScriptCallback`, `Fallback.After`→`FallbackAfter`, `Broker`→`BrokerAsUri`. Add new parsed/validated config the same way. YAML is parsed with `yaml.UnmarshalStrict`, so unknown keys are an error.
+- **`color-script`** is JavaScript run via goja; it must define `get_color(v)` returning a 7-char `#RRGGBB` (validated by `isValidHexColor`).
+- **Publish payload is the `publishMessage` struct** (`dispatcher/publishtype.go`); field order (Text, Icon, Color) defines the JSON and tests assert exact strings — keep it stable. Publishing an empty payload (`[]byte{}`) is intentional: it deletes the awtrix custom app.
+- **Build & release.** Build the single main package with `scripts/build.sh` (injects version via ldflags), not `go build ./...`. Releases: run `scripts/increase_sem_version_git_tag.ps1` (patch bump only, even for features), push the `v*` tag, and `.github/workflows/go-release.yml` builds the Windows/Linux binaries and publishes the GitHub release.
+
 
 #### JSON Properties
 
