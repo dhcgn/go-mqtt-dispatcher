@@ -2,6 +2,7 @@ package dispatcher
 
 type MockMqttClient struct {
 	PublishedMessages map[string][]byte
+	PublishCount      map[string]int
 	Subscriptions     map[string]func([]byte)
 	Log               func(s string)
 }
@@ -15,6 +16,7 @@ func NewMockMqttClient(logger ...func(s string)) *MockMqttClient {
 
 	return &MockMqttClient{
 		PublishedMessages: make(map[string][]byte),
+		PublishCount:      make(map[string]int),
 		Subscriptions:     make(map[string]func([]byte)),
 		Log:               logger[0],
 	}
@@ -23,6 +25,7 @@ func NewMockMqttClient(logger ...func(s string)) *MockMqttClient {
 func (m *MockMqttClient) Publish(topic string, payload []byte) error {
 	m.Log("Publishing to '" + topic + "': '" + string(payload) + "'")
 	m.PublishedMessages[topic] = payload
+	m.PublishCount[topic]++
 	return nil
 }
 

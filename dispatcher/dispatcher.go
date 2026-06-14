@@ -10,18 +10,39 @@ import (
 	"go-mqtt-dispatcher/utils"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
 	"github.com/oliveagle/jsonpath"
 )
 
+// now is the clock used by the fallback feature. It is a package var so tests
+// can override it for deterministic time (mirrors getTicker).
+var now = func() time.Time { return time.Now() }
+
 type dispatcherState map[string]map[string]float64
+
+// fallbackTrack records freshness state for one publish topic of an entry with
+// a stale-value fallback configured.
+type fallbackTrack struct {
+	lastActivity time.Time // last time any payload was received (no-value-read)
+	lastValue    float64   // last resolved value (no-value-change)
+	hasValue     bool      // lastValue is valid
+	lastChange   time.Time // last time the resolved value changed (no-value-change)
+	fired        bool      // fallback already published; suppresses re-fire until fresh data
+}
+
 type Dispatcher struct {
 	entries    *[]config.Entry
 	state      dispatcherState
 	mqttClient MqttClient
 	log        func(string)
+
+	// mu protects fallbacks only. The pre-existing `state` map is intentionally
+	// left unsynchronized (unchanged behavior).
+	mu        sync.Mutex
+	fallbacks map[string]*fallbackTrack // key = fallbackKey(entry.Name, pubTopic)
 }
 
 func NewDispatcher(entries *[]config.Entry, mqttClient MqttClient, log func(s string)) (*Dispatcher, error) {
@@ -34,7 +55,12 @@ func NewDispatcher(entries *[]config.Entry, mqttClient MqttClient, log func(s st
 		state:      make(dispatcherState),
 		mqttClient: mqttClient,
 		log:        log,
+		fallbacks:  make(map[string]*fallbackTrack),
 	}, nil
+}
+
+func fallbackKey(entryName, pubTopic string) string {
+	return entryName + "\x00" + pubTopic
 }
 
 // Run starts the dispatcher and creates triggers for the sources and attaches the callbacks
@@ -43,6 +69,10 @@ func (d *Dispatcher) Run() {
 		if entry.Disabled {
 			d.log("Entry disabled: " + entry.Name)
 			continue
+		}
+
+		if entry.HasFallback() {
+			d.startFallbackWatchdog(entry)
 		}
 
 		if entry.Source.MqttSource != nil {
@@ -80,7 +110,7 @@ func (d *Dispatcher) runTibberApi(entry config.TibberApiEntry) {
 				return
 			}
 			for _, topicPub := range entry.GetTopicsToPublish() {
-				c := callbackConfig{Entry: e.GetEntry(), Id: entry.GetID(), TransSource: entry.GetTibberApiSource(), TransTarget: topicPub, Filter: topicPub}
+				c := callbackConfig{Entry: e.GetEntry(), Id: entry.GetID(), PubTopic: topicPub.Topic, TransSource: entry.GetTibberApiSource(), TransTarget: topicPub, Filter: topicPub}
 				d.callback(payload, c, func(msg []byte) {
 					d.mqttClient.Publish(topicPub.Topic, msg)
 				})
@@ -115,7 +145,7 @@ func (d *Dispatcher) runHttp(entry config.HttpEntry) {
 					return
 				}
 				for _, topicPub := range entry.GetTopicsToPublish() {
-					c := callbackConfig{Entry: entry.GetEntry(), Id: url, TransSource: urlDef, TransTarget: topicPub, Filter: topicPub}
+					c := callbackConfig{Entry: entry.GetEntry(), Id: url, PubTopic: topicPub.Topic, TransSource: urlDef, TransTarget: topicPub, Filter: topicPub}
 					d.callback(payload, c, func(msg []byte) {
 						d.mqttClient.Publish(topicPub.Topic, msg)
 					})
@@ -146,7 +176,7 @@ func (d *Dispatcher) runMqtt(entry config.MqttEntry) {
 		err := d.mqttClient.Subscribe(topicSub.Topic, func(payload []byte) {
 			d.log("Received payload for " + topicSub.Topic)
 			for _, topicPub := range entry.GetTopicsToPublish() {
-				c := callbackConfig{Entry: entry.GetEntry(), Id: topicSub.Topic, TransSource: topicSub, TransTarget: topicPub, Filter: topicPub}
+				c := callbackConfig{Entry: entry.GetEntry(), Id: topicSub.Topic, PubTopic: topicPub.Topic, TransSource: topicSub, TransTarget: topicPub, Filter: topicPub}
 				d.callback(payload, c, func(msg []byte) {
 					d.mqttClient.Publish(topicPub.Topic, msg)
 				})
@@ -161,6 +191,7 @@ func (d *Dispatcher) runMqtt(entry config.MqttEntry) {
 type callbackConfig struct {
 	Entry       config.Entry
 	Id          string
+	PubTopic    string
 	TransSource config.TransformSource
 	TransTarget config.TransformTarget
 	Filter      config.Filter
@@ -191,6 +222,12 @@ func (d *Dispatcher) getOutputAsTibberGraph(payload []byte, c config.TransformSo
 
 // callback is called when a new event is received
 func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]byte)) {
+	// Any received payload counts as activity for the no-value-read fallback,
+	// including the tibber-graph, filter, and transform-error paths below.
+	if c.Entry.HasFallback() {
+		d.markActivity(c.Entry.Name, c.PubTopic)
+	}
+
 	if c.TransTarget != nil && c.TransTarget.GetOutputAsTibberGraph() {
 		p, err := d.getOutputAsTibberGraph(payload, c.TransSource)
 		if err != nil {
@@ -225,6 +262,11 @@ func (d *Dispatcher) callback(payload []byte, c callbackConfig, publish func([]b
 		} else {
 			d.log(fmt.Sprintf("Operation '%s' not supported", op))
 		}
+	}
+
+	// Track the resolved (possibly accumulated) value for no-value-change.
+	if c.Entry.HasFallback() {
+		d.markValue(c.Entry.Name, c.PubTopic, val)
 	}
 
 	// Filter
@@ -310,4 +352,140 @@ func (d *Dispatcher) transformPayload(payload []byte, t config.TransformSource) 
 	}
 
 	return result, nil
+}
+
+// markActivity records that a payload was received for a publish topic. Used by
+// the no-value-read fallback. No-op when no track exists (fallback disabled).
+func (d *Dispatcher) markActivity(entryName, pubTopic string) {
+	if entryName == "" || pubTopic == "" {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	t := d.fallbacks[fallbackKey(entryName, pubTopic)]
+	if t == nil {
+		return
+	}
+	t.lastActivity = now()
+	t.fired = false
+}
+
+// markValue records the resolved value for a publish topic. Used by the
+// no-value-change fallback; resets the fallback only when the value changes.
+func (d *Dispatcher) markValue(entryName, pubTopic string, val float64) {
+	if entryName == "" || pubTopic == "" {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	t := d.fallbacks[fallbackKey(entryName, pubTopic)]
+	if t == nil {
+		return
+	}
+	n := now()
+	t.lastActivity = n
+	if !t.hasValue || t.lastValue != val {
+		t.lastValue = val
+		t.hasValue = true
+		t.lastChange = n
+		t.fired = false
+	}
+}
+
+// seedFallback initializes tracking state for each publish topic of an entry so
+// markActivity/markValue have something to update and a never-delivering source
+// can still go stale (relative to startup).
+func (d *Dispatcher) seedFallback(entry config.Entry) {
+	start := now()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, pub := range entry.TopicsToPublish {
+		k := fallbackKey(entry.Name, pub.Topic)
+		if d.fallbacks[k] == nil {
+			d.fallbacks[k] = &fallbackTrack{lastActivity: start, lastChange: start}
+		}
+	}
+}
+
+// fireFallbacksIfStale publishes the fallback payload to any of the entry's
+// publish topics that have gone stale, marking each as fired so it is published
+// at most once per stale episode.
+func (d *Dispatcher) fireFallbacksIfStale(entry config.Entry) {
+	n := now()
+	mode := entry.FallbackMode()
+	after := entry.FallbackAfter
+
+	var due []string
+	d.mu.Lock()
+	for _, pub := range entry.TopicsToPublish {
+		t := d.fallbacks[fallbackKey(entry.Name, pub.Topic)]
+		if t == nil || t.fired {
+			continue
+		}
+		var stale bool
+		switch mode {
+		case config.FallbackModeNoValueRead:
+			stale = n.Sub(t.lastActivity) >= after
+		case config.FallbackModeNoValueChange:
+			stale = t.hasValue && n.Sub(t.lastChange) >= after
+		}
+		if stale {
+			t.fired = true
+			due = append(due, pub.Topic)
+		}
+	}
+	d.mu.Unlock()
+
+	// Publish outside the lock.
+	if len(due) == 0 {
+		return
+	}
+	payload := d.fallbackPayload(entry)
+	for _, topic := range due {
+		d.log("Fallback firing for " + entry.Name + " -> " + topic)
+		d.mqttClient.Publish(topic, payload)
+	}
+}
+
+// startFallbackWatchdog seeds tracking state and starts a goroutine that
+// periodically publishes the configured fallback once a topic goes stale.
+func (d *Dispatcher) startFallbackWatchdog(entry config.Entry) {
+	d.seedFallback(entry)
+
+	interval := entry.FallbackAfter / 4
+	if interval < time.Second {
+		interval = time.Second
+	}
+
+	d.log(fmt.Sprintf("- Fallback watchdog for %s: mode=%s after=%s", entry.Name, entry.FallbackMode(), entry.FallbackAfter))
+
+	go func(entry config.Entry) {
+		ticker := getTicker(interval)
+		defer ticker.Stop()
+
+		d.fireFallbacksIfStale(entry)
+		for range ticker.C {
+			d.fireFallbacksIfStale(entry)
+			if interruptRunHttpTickerAfterTick {
+				return
+			}
+		}
+	}(entry)
+}
+
+// fallbackPayload builds the literal fallback message for an entry. The value
+// and color are literal (they bypass outputFormat and the color-script); the
+// entry's icon is reused.
+func (d *Dispatcher) fallbackPayload(entry config.Entry) []byte {
+	msg := publishMessage{
+		Text:  entry.Fallback.Value,
+		Color: entry.Fallback.Color,
+		Icon:  entry.Icon,
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		d.log(fmt.Sprintf("Error marshaling fallback json: %v", err))
+		return errorPayload
+	}
+	return b
 }

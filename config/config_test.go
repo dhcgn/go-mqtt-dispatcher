@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -103,6 +104,60 @@ dispatcher-entries:
 			expectedErrorMessage: "ERROR RUNNING SCRIPT",
 			expectedConfig:       nil,
 		},
+		{
+			name: "InvalidFallbackMode",
+			mockReadFile: func(path string) ([]byte, error) {
+				return []byte(`
+mqtt:
+  broker: "tcp://localhost:1883"
+dispatcher-entries:
+  - fallback:
+      mode: "bogus"
+      after: "1h"
+      value: "? °C"
+      color: "#888888"
+`), nil
+			},
+			expectedError:        true,
+			expectedErrorMessage: "ERROR: INVALID FALLBACK MODE INDEX 0: 'bogus'",
+			expectedConfig:       nil,
+		},
+		{
+			name: "InvalidFallbackDuration",
+			mockReadFile: func(path string) ([]byte, error) {
+				return []byte(`
+mqtt:
+  broker: "tcp://localhost:1883"
+dispatcher-entries:
+  - fallback:
+      mode: "no-value-read"
+      after: "1hour"
+      value: "? °C"
+      color: "#888888"
+`), nil
+			},
+			expectedError:        true,
+			expectedErrorMessage: "ERROR PARSING FALLBACK DURATION INDEX 0",
+			expectedConfig:       nil,
+		},
+		{
+			name: "InvalidFallbackColor",
+			mockReadFile: func(path string) ([]byte, error) {
+				return []byte(`
+mqtt:
+  broker: "tcp://localhost:1883"
+dispatcher-entries:
+  - fallback:
+      mode: "no-value-read"
+      after: "1h"
+      value: "? °C"
+      color: "888888"
+`), nil
+			},
+			expectedError:        true,
+			expectedErrorMessage: "ERROR: INVALID FALLBACK COLOR INDEX 0: '888888'",
+			expectedConfig:       nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -127,4 +182,49 @@ dispatcher-entries:
 			}
 		})
 	}
+}
+
+func TestLoadConfigFallback(t *testing.T) {
+	t.Run("ValidFallback", func(t *testing.T) {
+		osReadFile = func(path string) ([]byte, error) {
+			return []byte(`
+mqtt:
+  broker: "tcp://localhost:1883"
+dispatcher-entries:
+  - fallback:
+      mode: "no-value-read"
+      after: "1h"
+      value: "? °C"
+      color: "#888888"
+`), nil
+		}
+
+		cfg, err := LoadConfig("dummy_path")
+		assert.NoError(t, err)
+		assert.NotNil(t, cfg)
+		entry := cfg.DispatcherEntries[0]
+		assert.True(t, entry.HasFallback())
+		assert.Equal(t, time.Hour, entry.FallbackAfter)
+		assert.Equal(t, "? °C", entry.Fallback.Value)
+		assert.Equal(t, "#888888", entry.Fallback.Color)
+	})
+
+	t.Run("FallbackNoneSkipsValidation", func(t *testing.T) {
+		osReadFile = func(path string) ([]byte, error) {
+			return []byte(`
+mqtt:
+  broker: "tcp://localhost:1883"
+dispatcher-entries:
+  - fallback:
+      mode: "none"
+`), nil
+		}
+
+		cfg, err := LoadConfig("dummy_path")
+		assert.NoError(t, err)
+		assert.NotNil(t, cfg)
+		entry := cfg.DispatcherEntries[0]
+		assert.False(t, entry.HasFallback())
+		assert.Equal(t, time.Duration(0), entry.FallbackAfter)
+	})
 }

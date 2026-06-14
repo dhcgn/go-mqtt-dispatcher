@@ -210,6 +210,11 @@ dispatcher-entries:
           return "#FFC0CB"; // pink
         }
       }
+    fallback:
+      mode: "no-value-read"   # none | no-value-read | no-value-change
+      after: "1h"             # Go duration string, e.g. 30s, 90m, 1h30m
+      value: "? W"            # literal text published when stale
+      color: "#888888"        # hex color of the stale value
 
   - name: "Solar power to topic solar power"
     source:
@@ -404,6 +409,37 @@ dispatcher-entries:
         }
       }
 ```
+
+### Stale-value fallback
+
+Each dispatcher entry may define an optional `fallback`. When a source stops
+delivering fresh data, the dispatcher publishes a configured placeholder value
+and color to the entry's publish topics so the display visibly shows "no data"
+instead of silently keeping a stale reading.
+
+```yaml
+fallback:
+  mode: "no-value-read"   # none | no-value-read | no-value-change
+  after: "1h"             # Go duration: 30s, 90m, 1h30m, ...
+  value: "? °C"           # literal text (published as-is, bypasses outputFormat)
+  color: "#888888"        # 7-character hex color (e.g. #888888)
+```
+
+| Field   | Description |
+| ------- | ----------- |
+| `mode`  | `none` (default, disabled), `no-value-read` (no payload at all arrived within `after`), or `no-value-change` (payloads kept arriving but the resolved value never changed within `after`). |
+| `after` | Stale timeout as a [Go duration](https://pkg.go.dev/time#ParseDuration) string. Note: use `m` for minutes (`90m`, `1h30m`), not `min`. |
+| `value` | Literal text published as the message text. It does **not** pass through `outputFormat` or the `color-script`. |
+| `color` | Literal 7-character hex color for the fallback value. |
+
+Notes:
+
+- The published fallback payload reuses the entry's `icon`: `{"text": <value>, "icon": <icon>, "color": <color>}`.
+- The fallback is published **once** per stale episode and automatically
+  re-armed when fresh data resumes (any payload for `no-value-read`, a changed
+  value for `no-value-change`).
+- `no-value-change` does not fire until at least one value has been seen, and is
+  not applied to tibber-graph outputs (only `no-value-read` applies there).
 
 # MQTT Dispatcher
 
